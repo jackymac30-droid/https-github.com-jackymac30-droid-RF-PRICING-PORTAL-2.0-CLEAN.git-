@@ -19,10 +19,7 @@ git push https://YOUR_TOKEN@github.com/jackymac30-droid/RF-PRICING-PORTAL-2.0.gi
 Replace `YOUR_TOKEN` with the token you just copied.
 
 **Example:**
-If your token is `ghp_abc123xyz`, the command becomes:
-```bash
-git push https://ghp_abc123xyz@github.com/jackymac30-droid/RF-PRICING-PORTAL-2.0.git main
-```
+Replace `YOUR_TOKEN` with your actual token from GitHub.
 
 ## Step 3: Run It!
 

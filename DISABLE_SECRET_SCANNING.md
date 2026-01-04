@@ -1,7 +1,7 @@
 # Disable Netlify Secret Scanning 🔓
 
 ## The Problem
-Netlify is detecting example tokens in documentation files (like `ghp_abc123xyz` in guides). These are just examples, not real secrets!
+Netlify is detecting example token patterns in documentation files. These are just examples, not real secrets!
 
 ## Solution: Disable Secret Scanning
 

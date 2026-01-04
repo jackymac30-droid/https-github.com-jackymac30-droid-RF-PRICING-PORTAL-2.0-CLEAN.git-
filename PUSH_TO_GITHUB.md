@@ -28,7 +28,7 @@ GitHub needs to know it's really YOU trying to upload your code. It's like a pas
 7. **Scroll to the bottom** and click the green **"Generate token"** button
 
 8. **COPY THE TOKEN IMMEDIATELY!** 
-   - It will look like: `ghp_1234567890abcdefghijklmnopqrstuvwxyz`
+   - It will be a long string starting with `ghp_`
    - You'll only see it ONCE - if you leave the page, you can't see it again!
    - Save it somewhere safe (like a text file) before closing the page
 
