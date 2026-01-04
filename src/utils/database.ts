@@ -106,22 +106,33 @@ export async function fetchQuotes(weekId: string, supplierId?: string): Promise<
 }
 
 export async function fetchQuotesWithDetails(weekId: string, supplierId?: string): Promise<QuoteWithDetails[]> {
-  let query = supabase
-    .from('quotes')
-    .select(`
-      *,
-      item:items(*),
-      supplier:suppliers(*),
-      week:weeks(*)
-    `)
-    .eq('week_id', weekId);
+  try {
+    let query = supabase
+      .from('quotes')
+      .select(`
+        *,
+        item:items(*),
+        supplier:suppliers(*),
+        week:weeks(*)
+      `)
+      .eq('week_id', weekId);
 
-  if (supplierId) {
-    query = query.eq('supplier_id', supplierId);
+    if (supplierId) {
+      query = query.eq('supplier_id', supplierId);
+    }
+
+    const { data, error } = await query;
+    
+    if (error) {
+      logger.error('Error fetching quotes with details:', error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (err) {
+    logger.error('Error in fetchQuotesWithDetails:', err);
+    throw err;
   }
-
-  const { data } = await query;
-  return data || [];
 }
 
 export async function updateSupplierQuote(

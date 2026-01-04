@@ -224,6 +224,7 @@ export function RFDashboard() {
       setQuotes(quotesData);
     } catch (err) {
       logger.error('Error loading quotes:', err);
+      showToast('Failed to load quotes. Please try again.', 'error');
     }
   }
 
