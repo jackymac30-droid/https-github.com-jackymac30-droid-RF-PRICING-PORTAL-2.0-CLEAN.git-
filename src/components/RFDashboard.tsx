@@ -1611,40 +1611,29 @@ export function RFDashboard() {
                     </button>
                   )}
                   {canSetFinal && (
-                    <button
-                      onClick={handlePushToFinalize}
-                      disabled={submittingCounters || submittingFinals}
-                      className="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition font-bold text-lg shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 border-2 border-green-400/50"
-                    >
-                      {submittingCounters || submittingFinals ? 'Processing...' : 'Push to Finalize'}
-                    </button>
-                  )}
-                  {canFinalizePricing && (
-                    <button
-                      onClick={handleFinalizePricing}
-                      disabled={finalizingPricing}
-                      className="px-8 py-4 bg-gradient-to-r from-emerald-600 to-green-600 text-white rounded-xl hover:from-emerald-700 hover:to-green-700 transition font-bold text-lg shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 border-2 border-emerald-400/50 flex items-center gap-2"
-                    >
-                      {finalizingPricing ? (
-                        <>
-                          <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
-                          Finalizing...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="w-5 h-5" />
-                          Finalize Week Pricing
-                        </>
-                      )}
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={handlePushToFinalize}
+                        disabled={submittingCounters || submittingFinals}
+                        className="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition font-bold text-lg shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 border-2 border-green-400/50"
+                      >
+                        {submittingCounters || submittingFinals ? 'Processing...' : 'Push to Finalize'}
+                      </button>
+                      <p className="text-white/60 text-xs text-center max-w-md mx-auto">
+                        Automatically sets final prices based on negotiations (counters, supplier responses, etc.)
+                      </p>
+                    </div>
                   )}
                 </div>
                 {canFinalizePricing && (
-                  <p className="text-white/70 text-sm mt-3">
-                    {finalizedSuppliers.length > 0 
-                      ? `Ready to finalize week pricing. This will unlock volume allocation for ${finalizedSuppliers.length} supplier${finalizedSuppliers.length !== 1 ? 's' : ''}.`
-                      : 'Finalize week pricing to unlock volume allocation workflow.'}
-                  </p>
+                  <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-400/30 rounded-xl">
+                    <p className="text-white/90 text-sm font-semibold mb-1">
+                      ✓ Pricing ready to finalize
+                    </p>
+                    <p className="text-white/70 text-xs">
+                      Go to the <strong>"Award Volume"</strong> tab to finalize week pricing and unlock volume allocation.
+                    </p>
+                  </div>
                 )}
               </div>
             )}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Award, Save, Check, Package, Unlock, AlertTriangle, Send, RefreshCw, Lock, Info } from 'lucide-react';
+import { Award, Save, Check, Package, Unlock, AlertTriangle, Send, RefreshCw, Lock, Info, CheckCircle } from 'lucide-react';
 import {
   fetchItems,
   fetchQuotesWithDetails,
@@ -9,7 +9,9 @@ import {
   submitAllocationsToSuppliers,
   fetchLastWeekDeliveredPrices,
   fetchItemPricingCalculations,
-  fetchSuppliers
+  fetchSuppliers,
+  finalizePricingForWeek,
+  getSuppliersWithSubmissions
 } from '../utils/database';
 import { sendPricingReminder } from '../utils/emailService';
 import { formatCurrency } from '../utils/helpers';
@@ -57,6 +59,8 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
   const [volumeNeedsSaved, setVolumeNeedsSaved] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pricingCalculations, setPricingCalculations] = useState<Map<string, { dlvd_price: number; margin: number }>>(new Map()); // item_id -> { dlvd_price, margin }
+  const [finalizingPricing, setFinalizingPricing] = useState(false);
+  const [canFinalizePricing, setCanFinalizePricing] = useState(false);
   const { showToast } = useToast();
   const { session } = useApp();
   const draftSaveTimerRef = useRef<NodeJS.Timeout>();
@@ -128,6 +132,15 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       setVolumeNeedsSaved(hasVolumeData);
 
       setLastWeekDeliveredPrices(lastWeekPricesData);
+
+      // Check if pricing can be finalized (week is open and has final prices)
+      if (selectedWeek.status === 'open') {
+        const quotes = await fetchQuotesWithDetails(selectedWeek.id);
+        const hasAnyFinalPrices = quotes.some(q => q.rf_final_fob !== null && q.rf_final_fob > 0);
+        setCanFinalizePricing(hasAnyFinalPrices);
+      } else {
+        setCanFinalizePricing(false);
+      }
     } catch (err) {
       logger.error('Error loading data:', err);
       showToast('Failed to load data. Please try refreshing the page.', 'error');
@@ -304,6 +317,32 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
 
     saveDraftDebounced(itemId, supplierId, quoteId, volume);
   }
+
+  const handleFinalizeWeekPricing = async () => {
+    if (!selectedWeek || finalizingPricing || selectedWeek.status !== 'open') return;
+
+    setFinalizingPricing(true);
+    try {
+      const result = await finalizePricingForWeek(selectedWeek.id, session?.user_name || 'RF Manager');
+      if (result.success) {
+        showToast('Week pricing finalized! You can now set volume needs and allocate volume.', 'success');
+        // Update week status locally
+        const updatedWeek = { ...selectedWeek, status: 'finalized' as const };
+        if (onWeekUpdate) {
+          onWeekUpdate(updatedWeek);
+        }
+        // Reload data to refresh UI
+        await loadData();
+      } else {
+        showToast(`Failed to finalize pricing: ${result.error}`, 'error');
+      }
+    } catch (err) {
+      logger.error('Error finalizing week pricing:', err);
+      showToast('Failed to finalize week pricing. Please try again.', 'error');
+    } finally {
+      setFinalizingPricing(false);
+    }
+  };
 
   async function saveVolumeNeeds() {
     if (!selectedWeek) return;
@@ -811,12 +850,43 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         <div className="p-6">
           {activeTab === 'volume_needed' ? (
             <div className="space-y-6">
-              {selectedWeek?.status !== 'finalized' && selectedWeek?.status !== 'closed' ? (
+              {selectedWeek?.status === 'open' && canFinalizePricing ? (
+                <div className="bg-gradient-to-r from-emerald-500/20 to-lime-500/20 border-2 border-emerald-400/50 rounded-xl p-6 mb-4 backdrop-blur-sm shadow-lg">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <CheckCircle className="w-6 h-6 text-emerald-300" />
+                        <h3 className="text-lg font-bold text-white">Ready to Finalize Week Pricing</h3>
+                      </div>
+                      <p className="text-sm text-white/90 mb-4">
+                        Finalize week pricing to unlock volume allocation. This will change the week status from "Open" to "Finalized" and allow you to set volume needs and allocate cases to suppliers.
+                      </p>
+                      <button
+                        onClick={handleFinalizeWeekPricing}
+                        disabled={finalizingPricing}
+                        className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                      >
+                        {finalizingPricing ? (
+                          <>
+                            <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                            Finalizing...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-5 h-5" />
+                            Finalize Week Pricing
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : selectedWeek?.status !== 'finalized' && selectedWeek?.status !== 'closed' ? (
                 <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4 mb-4">
                   <div className="flex items-center gap-3">
                     <Lock className="w-5 h-5 text-orange-300" />
                     <p className="text-sm text-white/80 font-medium">
-                      Please finalize pricing before setting volume requirements.
+                      Please set final prices in the Pricing tab, then return here to finalize week pricing.
                     </p>
                   </div>
                 </div>
