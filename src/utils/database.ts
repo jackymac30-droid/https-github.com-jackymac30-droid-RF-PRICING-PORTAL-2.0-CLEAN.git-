@@ -1204,13 +1204,11 @@ export async function finalizePricingForWeek(weekId: string, userName: string): 
       return { success: false, error: 'Cannot finalize: No quotes have final pricing set. Please set rf_final_fob for at least one quote.' };
     }
 
-    // Update week status
+    // Update week status (only use columns that exist in schema)
     const { error } = await supabase
       .from('weeks')
       .update({
         status: 'finalized',
-        finalized_at: new Date().toISOString(),
-        finalized_by: userName,
       })
       .eq('id', weekId);
 
