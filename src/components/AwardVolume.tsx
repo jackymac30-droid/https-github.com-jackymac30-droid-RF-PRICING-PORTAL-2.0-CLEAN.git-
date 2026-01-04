@@ -133,7 +133,17 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       setLastWeekDeliveredPrices(lastWeekPricesData);
 
       // Check if pricing can be finalized (week is open and has final prices)
-      if (selectedWeek.status === 'open') {
+      // Re-fetch week status to ensure we have the latest from database
+      const { supabase } = await import('../utils/supabase');
+      const { data: currentWeek } = await supabase
+        .from('weeks')
+        .select('status')
+        .eq('id', selectedWeek.id)
+        .single();
+
+      const weekStatus = currentWeek?.status || selectedWeek.status;
+      
+      if (weekStatus === 'open') {
         const quotes = await fetchQuotesWithDetails(selectedWeek.id);
         const hasAnyFinalPrices = quotes.some(q => q.rf_final_fob !== null && q.rf_final_fob > 0);
         setCanFinalizePricing(hasAnyFinalPrices);
