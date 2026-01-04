@@ -66,12 +66,12 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
     }
     
     // Fetch all items
-    const { data: allItems } = await supabase
+    const { data: fetchedItems } = await supabase
       .from('items')
       .select('*')
       .order('display_order');
     
-    const items = allItems || [];
+    const items = fetchedItems || [];
     console.log(`✅ Items ready: ${items.length} total`);
 
     // 3. Insert Weeks (check if they exist first)
