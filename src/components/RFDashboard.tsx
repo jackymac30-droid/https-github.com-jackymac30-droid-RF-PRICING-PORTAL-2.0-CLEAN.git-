@@ -202,9 +202,13 @@ export function RFDashboard() {
 
   // Set up realtime subscriptions after functions are defined
   useRealtime('quotes', useCallback(() => {
-    if (selectedWeek) loadWeekData();
-    if (selectedWeek && selectedSupplier) loadQuotes();
-  }, [selectedWeek, selectedSupplier, loadWeekData]));
+    if (selectedWeek) {
+      loadWeekData().catch(err => logger.error('Error in realtime loadWeekData:', err));
+    }
+    if (selectedWeek && selectedSupplier) {
+      loadQuotes().catch(err => logger.error('Error in realtime loadQuotes:', err));
+    }
+  }, [selectedWeek, selectedSupplier]));
   useRealtime('weeks', loadData);
 
   useEffect(() => {
