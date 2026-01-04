@@ -317,7 +317,9 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       setVolumeNeedsSaved(hasVolumeData);
 
       if (hasVolumeData) {
-        showToast('Volume needs saved successfully', 'success');
+        showToast('Volume needs saved successfully! You can now allocate volume to suppliers.', 'success');
+        // Auto-switch to allocate tab if user wants to proceed
+        // But don't force it - let them stay on volume_needed if they want to review
       } else {
         showToast('Please enter at least one volume need before saving', 'error');
       }
@@ -646,11 +648,11 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
               </button>
             )}
 
-            {activeTab === 'volume_needed' && canEdit && (
+            {activeTab === 'volume_needed' && selectedWeek?.status === 'finalized' && (
               <button
                 onClick={saveVolumeNeeds}
-                disabled={saving}
-                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
+                disabled={saving || !canEdit}
+                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? (
                   <>
@@ -660,13 +662,13 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    Save
+                    Save Volume Needs
                   </>
                 )}
               </button>
             )}
 
-            {activeTab === 'allocate' && canEdit && !selectedWeek?.allocation_submitted && (
+            {activeTab === 'allocate' && canEdit && !selectedWeek?.allocation_submitted && volumeNeedsSaved && (
               <button
                 onClick={handleSubmitAllocations}
                 disabled={submitting}
@@ -680,7 +682,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    Send
+                    Send Allocations to Suppliers
                   </>
                 )}
               </button>
@@ -728,7 +730,11 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
               const canAccess = selectedWeek?.allocation_submitted || 
                 ((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && volumeNeedsSaved);
               if (!canAccess) {
-                // Quiet UI: No toasts during planning - just prevent access
+                if (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') {
+                  showToast('Please save volume needs first before allocating volume', 'info');
+                } else {
+                  showToast('Please finalize pricing first', 'info');
+                }
                 return;
               }
               setActiveTab('allocate');
@@ -753,7 +759,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         <div className="p-6">
           {activeTab === 'volume_needed' ? (
             <div className="space-y-6">
-              {selectedWeek?.status !== 'finalized' ? (
+              {selectedWeek?.status !== 'finalized' && selectedWeek?.status !== 'closed' ? (
                 <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4 mb-4">
                   <div className="flex items-center gap-3">
                     <Lock className="w-5 h-5 text-orange-300" />
@@ -766,9 +772,17 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                 <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4 mb-4">
                   <div className="flex items-center gap-3">
                     <Package className="w-5 h-5 text-emerald-300" />
-                    <p className="text-sm text-white/80 font-medium">
-                      Enter the total number of cases needed for each SKU.
-                    </p>
+                    <div className="flex-1">
+                      <p className="text-sm text-white/80 font-medium">
+                        Enter the total number of cases needed for each SKU, then click "Save Volume Needs".
+                      </p>
+                      {volumeNeedsSaved && (
+                        <p className="text-xs text-emerald-300 mt-1 font-semibold flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          Volume needs saved! You can now allocate volume to suppliers.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
