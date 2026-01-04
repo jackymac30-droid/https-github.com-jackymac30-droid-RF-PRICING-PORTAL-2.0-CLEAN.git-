@@ -1,0 +1,83 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          200: '#bbf7d0',
+          300: '#86efac',
+          400: '#4ade80',
+          500: '#5CB800',
+          600: '#4d9a00',
+          700: '#3d7a00',
+          800: '#2e5c00',
+          900: '#1f3e00',
+        },
+        accent: {
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          200: '#bbf7d0',
+          300: '#86efac',
+          400: '#4ade80',
+          500: '#5CB800',
+          600: '#4d9a00',
+          700: '#3d7a00',
+          800: '#2e5c00',
+          900: '#1f3e00',
+        },
+        orange: {
+          50: '#fff7ed',
+          100: '#ffedd5',
+          200: '#fed7aa',
+          300: '#fdba74',
+          400: '#fb923c',
+          500: '#f97316',
+          600: '#ea580c',
+          700: '#c2410c',
+          800: '#9a3412',
+          900: '#7c2d12',
+        },
+        amber: {
+          50: '#fffbeb',
+          100: '#fef3c7',
+          200: '#fde68a',
+          300: '#fcd34d',
+          400: '#fbbf24',
+          500: '#f59e0b',
+          600: '#d97706',
+          700: '#b45309',
+          800: '#92400e',
+          900: '#78350f',
+        },
+      },
+      boxShadow: {
+        'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
+        'medium': '0 4px 20px -2px rgba(0, 0, 0, 0.1), 0 10px 30px -5px rgba(0, 0, 0, 0.08)',
+        'strong': '0 10px 40px -5px rgba(0, 0, 0, 0.15), 0 20px 50px -10px rgba(0, 0, 0, 0.12)',
+        'glow-blue': '0 0 20px rgba(92, 184, 0, 0.3), 0 0 40px rgba(92, 184, 0, 0.15)',
+        'glow-green': '0 0 20px rgba(92, 184, 0, 0.3), 0 0 40px rgba(92, 184, 0, 0.15)',
+        'inner-soft': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
+      },
+      fontFamily: {
+        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'sans-serif'],
+      },
+      spacing: {
+        '18': '4.5rem',
+        '88': '22rem',
+        '100': '25rem',
+        '112': '28rem',
+      },
+      borderRadius: {
+        'xl': '1rem',
+        '2xl': '1.5rem',
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+    },
+  },
+  plugins: [],
+};

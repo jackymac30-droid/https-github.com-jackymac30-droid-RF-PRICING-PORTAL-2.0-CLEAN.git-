@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robinson Fresh - Pricing Portal Demo</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .animate-spin {
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .card-elevated {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .hover\:shadow-strong:hover {
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    }
+    .btn-secondary {
+      background: white;
+      color: #374151;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      border: 1px solid #d1d5db;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-secondary:hover {
+      background: #f9fafb;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              200: '#bbf7d0',
+              300: '#86efac',
+              400: '#4ade80',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+            },
+            accent: {
+              50: '#fef3c7',
+              100: '#fde68a',
+              200: '#fcd34d',
+              300: '#fbbf24',
+              400: '#f59e0b',
+              500: '#d97706',
+              600: '#b45309',
+              700: '#92400e',
+              800: '#78350f',
+              900: '#451a03',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    const mockData = {
+      users: [
+        { id: '1', name: 'RF Manager', email: 'rf@robinsonfresh.com', role: 'rf' },
+        { id: '2', name: 'Berry Best', email: 'berrybest@example.com', role: 'supplier', supplier_id: 's1' },
+        { id: '3', name: 'Fresh Farms', email: 'fresh@example.com', role: 'supplier', supplier_id: 's2' },
+        { id: '4', name: 'Premium Berries', email: 'premium@example.com', role: 'supplier', supplier_id: 's3' },
+      ],
+      weeks: [
+        { id: 'w1', week_number: 6, start_date: '2026-01-05', end_date: '2026-01-11', status: 'open' },
+        { id: 'w2', week_number: 5, start_date: '2025-12-29', end_date: '2026-01-04', status: 'finalized' },
+        { id: 'w3', week_number: 4, start_date: '2025-12-22', end_date: '2025-12-28', status: 'closed' },
+      ],
+      items: [
+        { id: 'i1', name: 'Strawberries', pack_size: '8x1lb', category: 'strawberry', organic_flag: 'CONV', display_order: 1 },
+        { id: 'i2', name: 'Strawberries', pack_size: '12x1lb', category: 'strawberry', organic_flag: 'ORG', display_order: 2 },
+        { id: 'i3', name: 'Blueberries', pack_size: '12x6oz', category: 'blueberry', organic_flag: 'CONV', display_order: 3 },
+        { id: 'i4', name: 'Blueberries', pack_size: '6x18oz', category: 'blueberry', organic_flag: 'ORG', display_order: 4 },
+        { id: 'i5', name: 'Blackberries', pack_size: '12x6oz', category: 'blackberry', organic_flag: 'CONV', display_order: 5 },
+        { id: 'i6', name: 'Raspberries', pack_size: '12x6oz', category: 'raspberry', organic_flag: 'ORG', display_order: 6 },
+      ],
+      suppliers: [
+        { id: 's1', name: 'Berry Best', email: 'berrybest@example.com' },
+        { id: 's2', name: 'Fresh Farms', email: 'fresh@example.com' },
+        { id: 's3', name: 'Premium Berries', email: 'premium@example.com' },
+      ],
+    };
+
+    const initialQuotes = [
+      { id: 'q1', week_id: 'w1', item_id: 'i1', supplier_id: 's1', supplier_fob: 24.50, supplier_dlvd: 26.00, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q2', week_id: 'w1', item_id: 'i2', supplier_id: 's1', supplier_fob: 32.00, supplier_dlvd: 34.00, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q3', week_id: 'w1', item_id: 'i3', supplier_id: 's1', supplier_fob: 18.75, supplier_dlvd: 20.25, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q4', week_id: 'w1', item_id: 'i4', supplier_id: 's1', supplier_fob: 28.50, supplier_dlvd: 30.00, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q5', week_id: 'w1', item_id: 'i5', supplier_id: 's1', supplier_fob: 22.00, supplier_dlvd: 23.50, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q6', week_id: 'w1', item_id: 'i6', supplier_id: 's1', supplier_fob: 26.75, supplier_dlvd: 28.25, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+
+      { id: 'q7', week_id: 'w1', item_id: 'i1', supplier_id: 's2', supplier_fob: 23.80, supplier_dlvd: 25.30, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q8', week_id: 'w1', item_id: 'i2', supplier_id: 's2', supplier_fob: 31.50, supplier_dlvd: 33.50, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q9', week_id: 'w1', item_id: 'i3', supplier_id: 's2', supplier_fob: 19.20, supplier_dlvd: 20.70, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q10', week_id: 'w1', item_id: 'i4', supplier_id: 's2', supplier_fob: 29.00, supplier_dlvd: 30.50, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q11', week_id: 'w1', item_id: 'i5', supplier_id: 's2', supplier_fob: 21.50, supplier_dlvd: 23.00, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q12', week_id: 'w1', item_id: 'i6', supplier_id: 's2', supplier_fob: null, supplier_dlvd: null, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+
+      { id: 'q13', week_id: 'w1', item_id: 'i1', supplier_id: 's3', supplier_fob: 25.00, supplier_dlvd: 26.50, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q14', week_id: 'w1', item_id: 'i2', supplier_id: 's3', supplier_fob: null, supplier_dlvd: null, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q15', week_id: 'w1', item_id: 'i3', supplier_id: 's3', supplier_fob: 18.90, supplier_dlvd: 20.40, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q16', week_id: 'w1', item_id: 'i4', supplier_id: 's3', supplier_fob: 28.75, supplier_dlvd: 30.25, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q17', week_id: 'w1', item_id: 'i5', supplier_id: 's3', supplier_fob: 22.25, supplier_dlvd: 23.75, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+      { id: 'q18', week_id: 'w1', item_id: 'i6', supplier_id: 's3', supplier_fob: 27.00, supplier_dlvd: 28.50, rf_counter_fob: null, supplier_response: null, supplier_revised_fob: null, rf_final_fob: null },
+    ];
+
+    function App() {
+      const [session, setSession] = useState(null);
+      const [quotes, setQuotes] = useState(initialQuotes);
+      const [toast, setToast] = useState(null);
+
+      const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+      };
+
+      const login = (email) => {
+        const user = mockData.users.find(u => u.email === email);
+        if (user) {
+          setSession(user);
+          showToast(`Welcome, ${user.name}!`);
+        }
+      };
+
+      const logout = () => {
+        setSession(null);
+        showToast('Logged out successfully');
+      };
+
+      if (!session) {
+        return <Login onLogin={login} />;
+      }
+
+      if (session.role === 'supplier') {
+        return <SupplierDashboard session={session} logout={logout} quotes={quotes} setQuotes={setQuotes} showToast={showToast} />;
+      }
+
+      return <RFDashboard session={session} logout={logout} quotes={quotes} setQuotes={setQuotes} showToast={showToast} />;
+    }
+
+    function Login({ onLogin }) {
+      const [email, setEmail] = useState('');
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onLogin(email);
+      };
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-lime-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Robinson Fresh</h1>
+              <p className="text-gray-600">Pricing Portal</p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-4 focus:ring-green-100 transition-all"
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+
+              <button type="submit" className="w-full btn-primary">
+                Sign In
+              </button>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                <p className="text-sm text-blue-800 font-medium mb-2">Demo Accounts:</p>
+                <div className="space-y-1 text-sm text-blue-700">
+                  <div className="cursor-pointer hover:text-blue-900" onClick={() => setEmail('rf@robinsonfresh.com')}>
+                    RF Manager: rf@robinsonfresh.com
+                  </div>
+                  <div className="cursor-pointer hover:text-blue-900" onClick={() => setEmail('berrybest@example.com')}>
+                    Berry Best: berrybest@example.com
+                  </div>
+                  <div className="cursor-pointer hover:text-blue-900" onClick={() => setEmail('fresh@example.com')}>
+                    Fresh Farms: fresh@example.com
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    function SupplierDashboard({ session, logout, quotes, setQuotes, showToast }) {
+      const [selectedWeek, setSelectedWeek] = useState(mockData.weeks[0]);
+      const [priceInputs, setPriceInputs] = useState({});
+      const [dlvdInputs, setDlvdInputs] = useState({});
+      const [counterResponses, setCounterResponses] = useState({});
+      const [revisedInputs, setRevisedInputs] = useState({});
+
+      const supplierQuotes = quotes.filter(q => q.week_id === selectedWeek.id && q.supplier_id === session.supplier_id);
+
+      const handleSubmitPrices = () => {
+        const updated = quotes.map(q => {
+          if (q.week_id === selectedWeek.id && q.supplier_id === session.supplier_id) {
+            const fob = priceInputs[q.item_id];
+            const dlvd = dlvdInputs[q.item_id];
+            if (fob) {
+              return { ...q, supplier_fob: parseFloat(fob), supplier_dlvd: dlvd ? parseFloat(dlvd) : null };
+            }
+          }
+          return q;
+        });
+        setQuotes(updated);
+        setPriceInputs({});
+        setDlvdInputs({});
+        showToast('Prices submitted successfully!');
+      };
+
+      const handleRespondToCounters = () => {
+        const updated = quotes.map(q => {
+          if (q.week_id === selectedWeek.id && q.supplier_id === session.supplier_id) {
+            const response = counterResponses[q.item_id];
+            const revised = revisedInputs[q.item_id];
+            if (response) {
+              return {
+                ...q,
+                supplier_response: response,
+                supplier_revised_fob: revised ? parseFloat(revised) : null
+              };
+            }
+          }
+          return q;
+        });
+        setQuotes(updated);
+        setCounterResponses({});
+        setRevisedInputs({});
+        showToast('Responses submitted successfully!');
+      };
+
+      const hasCounters = supplierQuotes.some(q => q.rf_counter_fob !== null);
+      const canSubmitPrices = supplierQuotes.some(q => q.supplier_fob === null);
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+          <header className="bg-white shadow-md border-b-2 border-green-500">
+            <div className="max-w-7xl mx-auto px-6 py-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">{session.name}</h1>
+                  <p className="text-sm text-gray-600">Supplier Portal</p>
+                </div>
+                <button onClick={logout} className="btn-secondary">
+                  Logout
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-7xl mx-auto px-6 py-8">
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Week</label>
+              <select
+                value={selectedWeek.id}
+                onChange={(e) => setSelectedWeek(mockData.weeks.find(w => w.id === e.target.value))}
+                className="w-full max-w-md px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-4 focus:ring-green-100"
+              >
+                {mockData.weeks.map(week => (
+                  <option key={week.id} value={week.id}>
+                    Week {week.week_number} ({week.start_date} to {week.end_date}) - {week.status.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="card-elevated">
+              <div className="p-6 border-b">
+                <h2 className="text-xl font-bold text-gray-900">Week {selectedWeek.week_number} Pricing</h2>
+                <p className="text-sm text-gray-600">{selectedWeek.start_date} to {selectedWeek.end_date}</p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pack Size</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Your FOB</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Your DLVD</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RF Counter</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Your Response</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {mockData.items.map(item => {
+                      const quote = supplierQuotes.find(q => q.item_id === item.id);
+                      if (!quote) return null;
+
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-900">{item.name}</div>
+                            <div className="text-sm text-gray-600">{item.organic_flag}</div>
+                          </td>
+                          <td className="px-6 py-4 text-gray-900">{item.pack_size}</td>
+                          <td className="px-6 py-4">
+                            {quote.supplier_fob ? (
+                              <span className="text-green-600 font-medium">${quote.supplier_fob.toFixed(2)}</span>
+                            ) : (
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={priceInputs[item.id] || ''}
+                                onChange={(e) => setPriceInputs({...priceInputs, [item.id]: e.target.value})}
+                                className="w-28 px-3 py-2 border rounded-lg"
+                                placeholder="0.00"
+                              />
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            {quote.supplier_dlvd ? (
+                              <span className="text-gray-600">${quote.supplier_dlvd.toFixed(2)}</span>
+                            ) : (
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={dlvdInputs[item.id] || ''}
+                                onChange={(e) => setDlvdInputs({...dlvdInputs, [item.id]: e.target.value})}
+                                className="w-28 px-3 py-2 border rounded-lg"
+                                placeholder="0.00"
+                              />
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            {quote.rf_counter_fob ? (
+                              <span className="text-orange-600 font-medium">${quote.rf_counter_fob.toFixed(2)}</span>
+                            ) : '-'}
+                          </td>
+                          <td className="px-6 py-4">
+                            {quote.rf_counter_fob && !quote.supplier_response ? (
+                              <div className="space-y-2">
+                                <select
+                                  value={counterResponses[item.id] || ''}
+                                  onChange={(e) => setCounterResponses({...counterResponses, [item.id]: e.target.value})}
+                                  className="w-full px-3 py-2 border rounded-lg"
+                                >
+                                  <option value="">Select...</option>
+                                  <option value="accept">Accept</option>
+                                  <option value="revise">Revise</option>
+                                </select>
+                                {counterResponses[item.id] === 'revise' && (
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={revisedInputs[item.id] || ''}
+                                    onChange={(e) => setRevisedInputs({...revisedInputs, [item.id]: e.target.value})}
+                                    className="w-full px-3 py-2 border rounded-lg"
+                                    placeholder="Revised price"
+                                  />
+                                )}
+                              </div>
+                            ) : quote.supplier_response ? (
+                              <div>
+                                <span className="font-medium uppercase text-sm">{quote.supplier_response}</span>
+                                {quote.supplier_revised_fob && (
+                                  <div className="text-sm text-gray-600">Revised: ${quote.supplier_revised_fob.toFixed(2)}</div>
+                                )}
+                              </div>
+                            ) : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="p-6 border-t bg-gray-50">
+                {canSubmitPrices && (
+                  <button onClick={handleSubmitPrices} className="btn-primary">
+                    Submit Prices
+                  </button>
+                )}
+                {hasCounters && !supplierQuotes.some(q => q.supplier_response) && (
+                  <button onClick={handleRespondToCounters} className="btn-primary">
+                    Submit Responses
+                  </button>
+                )}
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    function RFDashboard({ session, logout, quotes, setQuotes, showToast }) {
+      const [selectedWeek, setSelectedWeek] = useState(mockData.weeks[0]);
+      const [selectedSupplier, setSelectedSupplier] = useState(null);
+      const [counterInputs, setCounterInputs] = useState({});
+      const [finalInputs, setFinalInputs] = useState({});
+
+      const supplierQuotes = selectedSupplier
+        ? quotes.filter(q => q.week_id === selectedWeek.id && q.supplier_id === selectedSupplier.id)
+        : [];
+
+      const getSuppliersByStatus = () => {
+        const submitted = [];
+        const notSubmitted = [];
+        const counter = [];
+        const finalized = [];
+
+        mockData.suppliers.forEach(supplier => {
+          const supplierQuotes = quotes.filter(q => q.week_id === selectedWeek.id && q.supplier_id === supplier.id);
+          const hasSubmitted = supplierQuotes.some(q => q.supplier_fob !== null);
+          const hasCounters = supplierQuotes.some(q => q.rf_counter_fob !== null);
+          const hasResponded = supplierQuotes.some(q => q.supplier_response !== null);
+          const hasFinalized = supplierQuotes.every(q => q.rf_final_fob !== null);
+
+          if (hasFinalized) {
+            finalized.push(supplier);
+          } else if (hasResponded) {
+            counter.push(supplier);
+          } else if (hasSubmitted) {
+            submitted.push(supplier);
+          } else {
+            notSubmitted.push(supplier);
+          }
+        });
+
+        return { submitted, notSubmitted, counter, finalized };
+      };
+
+      const { submitted, notSubmitted, counter, finalized } = getSuppliersByStatus();
+
+      const handleSubmitCounters = () => {
+        const updated = quotes.map(q => {
+          if (q.week_id === selectedWeek.id && q.supplier_id === selectedSupplier.id) {
+            const counter = counterInputs[q.item_id];
+            if (counter) {
+              return { ...q, rf_counter_fob: parseFloat(counter) };
+            }
+          }
+          return q;
+        });
+        setQuotes(updated);
+        setCounterInputs({});
+        setSelectedSupplier(null);
+        showToast('Counters sent successfully!');
+      };
+
+      const handleSubmitFinals = () => {
+        const updated = quotes.map(q => {
+          if (q.week_id === selectedWeek.id && q.supplier_id === selectedSupplier.id) {
+            const final = finalInputs[q.item_id];
+            if (final) {
+              return { ...q, rf_final_fob: parseFloat(final) };
+            } else if (q.supplier_revised_fob) {
+              return { ...q, rf_final_fob: q.supplier_revised_fob };
+            } else if (q.rf_counter_fob) {
+              return { ...q, rf_final_fob: q.rf_counter_fob };
+            } else if (q.supplier_fob) {
+              return { ...q, rf_final_fob: q.supplier_fob };
+            }
+          }
+          return q;
+        });
+        setQuotes(updated);
+        setFinalInputs({});
+        setSelectedSupplier(null);
+        showToast('Final prices set successfully!');
+      };
+
+      const hasInitialPrices = supplierQuotes.some(q => q.supplier_fob !== null);
+      const hasCountersSent = supplierQuotes.some(q => q.rf_counter_fob !== null);
+      const canSendCounters = hasInitialPrices && !hasCountersSent;
+      const canSetFinal = hasCountersSent;
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+          <header className="bg-white shadow-md border-b-2 border-green-500">
+            <div className="max-w-7xl mx-auto px-6 py-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Robinson Fresh</h1>
+                  <p className="text-sm text-gray-600">RF Manager Portal</p>
+                </div>
+                <button onClick={logout} className="btn-secondary">
+                  Logout
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-7xl mx-auto px-6 py-8">
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Week</label>
+                <select
+                  value={selectedWeek.id}
+                  onChange={(e) => {
+                    setSelectedWeek(mockData.weeks.find(w => w.id === e.target.value));
+                    setSelectedSupplier(null);
+                  }}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                >
+                  {mockData.weeks.map(week => (
+                    <option key={week.id} value={week.id}>
+                      Week {week.week_number} ({week.start_date} to {week.end_date}) - {week.status.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {!selectedSupplier && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Supplier</label>
+                  <select
+                    value={selectedSupplier?.id || ''}
+                    onChange={(e) => setSelectedSupplier(mockData.suppliers.find(s => s.id === e.target.value))}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                  >
+                    <option value="">Choose a supplier...</option>
+                    {mockData.suppliers.map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {!selectedSupplier && (
+              <div className="grid grid-cols-4 gap-4 mb-8">
+                <div className="card-elevated p-6">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Not Submitted</h3>
+                  <div className="text-2xl font-bold text-gray-900 mb-3">{notSubmitted.length}</div>
+                  <div className="space-y-1">
+                    {notSubmitted.map(s => (
+                      <div key={s.id} className="text-sm text-gray-700">{s.name}</div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="card-elevated p-6 border-l-4 border-green-500">
+                  <h3 className="text-xs font-bold text-green-600 uppercase mb-3">Submitted</h3>
+                  <div className="text-2xl font-bold text-green-900 mb-3">{submitted.length}</div>
+                  <div className="space-y-1">
+                    {submitted.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedSupplier(s)}
+                        className="text-sm text-green-700 hover:text-green-900 font-medium"
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="card-elevated p-6 border-l-4 border-orange-500">
+                  <h3 className="text-xs font-bold text-orange-600 uppercase mb-3">Counter</h3>
+                  <div className="text-2xl font-bold text-orange-900 mb-3">{counter.length}</div>
+                  <div className="space-y-1">
+                    {counter.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedSupplier(s)}
+                        className="text-sm text-orange-700 hover:text-orange-900 font-medium"
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="card-elevated p-6 border-l-4 border-blue-500">
+                  <h3 className="text-xs font-bold text-blue-600 uppercase mb-3">Finalized</h3>
+                  <div className="text-2xl font-bold text-blue-900 mb-3">{finalized.length}</div>
+                  <div className="space-y-1">
+                    {finalized.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedSupplier(s)}
+                        className="text-sm text-blue-700 hover:text-blue-900 font-medium"
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {selectedSupplier && (
+              <div className="card-elevated">
+                <div className="p-6 border-b">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">{selectedSupplier.name} - Week {selectedWeek.week_number}</h2>
+                      <p className="text-sm text-gray-600">{selectedWeek.start_date} to {selectedWeek.end_date}</p>
+                    </div>
+                    <button onClick={() => setSelectedSupplier(null)} className="btn-secondary">
+                      ← Back
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pack Size</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier FOB</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RF Counter</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier Response</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RF Final</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {mockData.items.map(item => {
+                        const quote = supplierQuotes.find(q => q.item_id === item.id);
+                        if (!quote) return null;
+
+                        return (
+                          <tr key={item.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4">
+                              <div className="font-medium text-gray-900">{item.name}</div>
+                              <div className="text-sm text-gray-600">{item.organic_flag}</div>
+                            </td>
+                            <td className="px-6 py-4 text-gray-900">{item.pack_size}</td>
+                            <td className="px-6 py-4">
+                              {quote.supplier_fob ? (
+                                <span className="text-gray-900 font-medium">${quote.supplier_fob.toFixed(2)}</span>
+                              ) : '-'}
+                            </td>
+                            <td className="px-6 py-4">
+                              {canSendCounters ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={counterInputs[item.id] || ''}
+                                  onChange={(e) => setCounterInputs({...counterInputs, [item.id]: e.target.value})}
+                                  className="w-28 px-3 py-2 border rounded-lg"
+                                  placeholder="0.00"
+                                />
+                              ) : (
+                                <span className="text-orange-600 font-medium">
+                                  {quote.rf_counter_fob ? `$${quote.rf_counter_fob.toFixed(2)}` : '-'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              {quote.supplier_response ? (
+                                <div>
+                                  <span className="font-medium uppercase text-sm">{quote.supplier_response}</span>
+                                  {quote.supplier_revised_fob && (
+                                    <div className="text-sm text-gray-600">
+                                      Revised: ${quote.supplier_revised_fob.toFixed(2)}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : '-'}
+                            </td>
+                            <td className="px-6 py-4">
+                              {canSetFinal ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={finalInputs[item.id] || ''}
+                                  onChange={(e) => setFinalInputs({...finalInputs, [item.id]: e.target.value})}
+                                  className="w-28 px-3 py-2 border rounded-lg"
+                                  placeholder="0.00"
+                                />
+                              ) : (
+                                <span className="text-green-600 font-medium">
+                                  {quote.rf_final_fob ? `$${quote.rf_final_fob.toFixed(2)}` : '-'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-6 border-t bg-gray-50">
+                  {canSendCounters && (
+                    <button onClick={handleSubmitCounters} className="btn-primary mr-3">
+                      Push to Counter
+                    </button>
+                  )}
+                  {canSetFinal && (
+                    <button onClick={handleSubmitFinals} className="btn-primary">
+                      Push to Finalize
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    }
+
+    function Toast({ message, type }) {
+      return (
+        <div className={`fixed top-4 right-4 px-6 py-4 rounded-lg shadow-xl ${
+          type === 'success' ? 'bg-green-600' : 'bg-red-600'
+        } text-white font-medium z-50 animate-slide-in`}>
+          {message}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

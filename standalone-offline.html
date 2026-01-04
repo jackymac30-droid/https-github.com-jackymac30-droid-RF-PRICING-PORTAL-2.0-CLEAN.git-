@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RF Pricing Portal - Offline Demo</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              200: '#bbf7d0',
+              300: '#86efac',
+              400: '#4ade80',
+              500: '#5CB800',
+              600: '#4d9a00',
+              700: '#3d7a00',
+              800: '#2e5c00',
+              900: '#1f3e00',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * {
+      transition: all 0.2s ease-in-out;
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, createContext, useContext } = React;
+
+    // Mock Data Store
+    const MOCK_DATA = {
+      suppliers: [
+        { id: 's1', name: 'Berry Best Co', email: 'supplier2@berrybest.com' },
+        { id: 's2', name: 'Fresh Farms Inc', email: 'supplier1@freshfarms.com' },
+        { id: 's3', name: 'Organic Growers', email: 'supplier3@organicgrowers.com' },
+      ],
+      items: [
+        { id: 'i1', name: 'Strawberry', pack_size: '4×2 lb', category: 'strawberry', organic_flag: 'CONV' },
+        { id: 'i2', name: 'Strawberry', pack_size: '8×1 lb', category: 'strawberry', organic_flag: 'ORG' },
+        { id: 'i3', name: 'Blueberry', pack_size: '18 oz', category: 'blueberry', organic_flag: 'CONV' },
+        { id: 'i4', name: 'Blueberry', pack_size: 'Pint', category: 'blueberry', organic_flag: 'ORG' },
+      ],
+      weeks: [
+        { id: 'w1', week_number: 1, start_date: '2025-01-01', end_date: '2025-01-07', status: 'closed' },
+        { id: 'w2', week_number: 2, start_date: '2025-01-08', end_date: '2025-01-14', status: 'open' },
+      ],
+      quotes: []
+    };
+
+    // Generate quotes
+    MOCK_DATA.suppliers.forEach(supplier => {
+      MOCK_DATA.items.forEach(item => {
+        MOCK_DATA.weeks.forEach(week => {
+          const basePrice = 15 + Math.random() * 5;
+          MOCK_DATA.quotes.push({
+            id: `q-${week.id}-${item.id}-${supplier.id}`,
+            week_id: week.id,
+            item_id: item.id,
+            supplier_id: supplier.id,
+            supplier_fob: week.status === 'closed' ? parseFloat(basePrice.toFixed(2)) : null,
+            supplier_dlvd: week.status === 'closed' ? parseFloat((basePrice + 3).toFixed(2)) : null,
+            rf_counter_fob: week.status === 'closed' ? parseFloat((basePrice - 0.5).toFixed(2)) : null,
+            supplier_response: week.status === 'closed' ? 'accept' : null,
+            rf_final_fob: week.status === 'closed' ? parseFloat((basePrice - 0.5).toFixed(2)) : null,
+            awarded_volume: week.status === 'closed' ? Math.floor(100 + Math.random() * 200) : 0,
+          });
+        });
+      });
+    });
+
+    // Context
+    const AppContext = createContext();
+
+    function AppProvider({ children }) {
+      const [session, setSession] = useState(() => {
+        const stored = localStorage.getItem('rf_session');
+        return stored ? JSON.parse(stored) : null;
+      });
+
+      const login = (userId, userName, role, supplierId) => {
+        const newSession = { user_id: userId, user_name: userName, role, supplier_id: supplierId };
+        setSession(newSession);
+        localStorage.setItem('rf_session', JSON.stringify(newSession));
+      };
+
+      const logout = () => {
+        setSession(null);
+        localStorage.removeItem('rf_session');
+      };
+
+      return (
+        <AppContext.Provider value={{ session, login, logout }}>
+          {children}
+        </AppContext.Provider>
+      );
+    }
+
+    function useApp() {
+      return useContext(AppContext);
+    }
+
+    // Login Component
+    function Login() {
+      const { login } = useApp();
+      const [selectedUser, setSelectedUser] = useState('');
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        if (!selectedUser) return;
+
+        if (selectedUser === 'rf') {
+          login('rf-user', 'RF Manager', 'rf');
+        } else {
+          const supplier = MOCK_DATA.suppliers.find(s => s.id === selectedUser);
+          if (supplier) {
+            login(supplier.id, supplier.name, 'supplier', supplier.id);
+          }
+        }
+      };
+
+      return (
+        <div className="min-h-screen bg-gradient-to-b from-white via-gray-50/30 to-white flex items-center justify-center px-6">
+          <div className="w-full max-w-xl">
+            <div className="text-center mb-12">
+              <div className="mb-8 text-6xl">🍓</div>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">RF Pricing Portal</h1>
+              <p className="text-gray-500">Offline Demo Version</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select User</label>
+                <select
+                  value={selectedUser}
+                  onChange={e => setSelectedUser(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
+                >
+                  <option value="">Choose a user...</option>
+                  <optgroup label="RF Internal">
+                    <option value="rf">RF Manager</option>
+                  </optgroup>
+                  <optgroup label="Suppliers">
+                    {MOCK_DATA.suppliers.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700"
+              >
+                Sign In
+              </button>
+            </form>
+
+            <div className="mt-8 text-center text-xs text-gray-400">
+              Standalone offline demo - all data stored in memory
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Dashboard Component
+    function Dashboard() {
+      const { session, logout } = useApp();
+      const [selectedWeek, setSelectedWeek] = useState(MOCK_DATA.weeks[1].id);
+      const [quotes, setQuotes] = useState(MOCK_DATA.quotes);
+
+      const currentWeek = MOCK_DATA.weeks.find(w => w.id === selectedWeek);
+      const weekQuotes = quotes.filter(q => q.week_id === selectedWeek);
+
+      const updateQuote = (quoteId, field, value) => {
+        setQuotes(prev => prev.map(q =>
+          q.id === quoteId ? { ...q, [field]: value } : q
+        ));
+      };
+
+      const isSupplier = session.role === 'supplier';
+      const supplierQuotes = isSupplier
+        ? weekQuotes.filter(q => q.supplier_id === session.supplier_id)
+        : weekQuotes;
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+          {/* Header */}
+          <div className="bg-white border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-6 py-4">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className="text-3xl">🍓</div>
+                  <div>
+                    <h1 className="text-xl font-bold text-gray-800">RF Pricing Portal</h1>
+                    <p className="text-sm text-gray-500">{session.user_name} ({session.role})</p>
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="max-w-7xl mx-auto px-6 py-8">
+            {/* Week Selector */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Week</label>
+              <select
+                value={selectedWeek}
+                onChange={e => setSelectedWeek(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              >
+                {MOCK_DATA.weeks.map(w => (
+                  <option key={w.id} value={w.id}>
+                    Week {w.week_number} ({w.start_date} to {w.end_date}) - {w.status.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Pricing Table */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-800">
+                  {isSupplier ? 'Your Quotes' : 'All Quotes'}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {supplierQuotes.length} items
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      {!isSupplier && <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>}
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pack Size</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">FOB Price</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">DLVD Price</th>
+                      {currentWeek?.status === 'closed' && (
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Volume</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {supplierQuotes.map(quote => {
+                      const item = MOCK_DATA.items.find(i => i.id === quote.item_id);
+                      const supplier = MOCK_DATA.suppliers.find(s => s.id === quote.supplier_id);
+                      const canEdit = isSupplier && currentWeek?.status === 'open';
+
+                      return (
+                        <tr key={quote.id} className="hover:bg-gray-50">
+                          {!isSupplier && (
+                            <td className="px-4 py-3 text-sm text-gray-900">{supplier?.name}</td>
+                          )}
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{item?.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{item?.pack_size}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              item?.organic_flag === 'ORG'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {item?.organic_flag}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right">
+                            {canEdit ? (
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={quote.supplier_fob || ''}
+                                onChange={e => updateQuote(quote.id, 'supplier_fob', parseFloat(e.target.value))}
+                                className="w-24 px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                placeholder="0.00"
+                              />
+                            ) : (
+                              <span className="font-medium text-gray-900">
+                                {quote.supplier_fob ? `$${quote.supplier_fob.toFixed(2)}` : '-'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right">
+                            {canEdit ? (
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={quote.supplier_dlvd || ''}
+                                onChange={e => updateQuote(quote.id, 'supplier_dlvd', parseFloat(e.target.value))}
+                                className="w-24 px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                placeholder="0.00"
+                              />
+                            ) : (
+                              <span className="font-medium text-gray-900">
+                                {quote.supplier_dlvd ? `$${quote.supplier_dlvd.toFixed(2)}` : '-'}
+                              </span>
+                            )}
+                          </td>
+                          {currentWeek?.status === 'closed' && (
+                            <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">
+                              {quote.awarded_volume > 0 ? quote.awarded_volume.toLocaleString() : '-'}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {supplierQuotes.length === 0 && (
+                <div className="px-6 py-12 text-center text-gray-500">
+                  No quotes available for this week
+                </div>
+              )}
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="text-sm text-gray-500 mb-1">Total Items</div>
+                <div className="text-3xl font-bold text-gray-900">{supplierQuotes.length}</div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="text-sm text-gray-500 mb-1">Quoted Items</div>
+                <div className="text-3xl font-bold text-primary-600">
+                  {supplierQuotes.filter(q => q.supplier_fob !== null).length}
+                </div>
+              </div>
+              {currentWeek?.status === 'closed' && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="text-sm text-gray-500 mb-1">Total Volume</div>
+                  <div className="text-3xl font-bold text-gray-900">
+                    {supplierQuotes.reduce((sum, q) => sum + (q.awarded_volume || 0), 0).toLocaleString()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Main App
+    function App() {
+      const { session } = useApp();
+      return session ? <Dashboard /> : <Login />;
+    }
+
+    // Render
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(
+      <AppProvider>
+        <App />
+      </AppProvider>
+    );
+  </script>
+</body>
+</html>

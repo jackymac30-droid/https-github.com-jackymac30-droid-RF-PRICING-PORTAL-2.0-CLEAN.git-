@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seed Database</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1e293b;
+            color: white;
+        }
+        .container {
+            background: #334155;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #10b981;
+            margin-top: 0;
+        }
+        button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-weight: 600;
+        }
+        button:hover {
+            background: #059669;
+        }
+        button:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            background: #1e293b;
+            min-height: 100px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+        .warning { color: #f59e0b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌱 Seed Database Tool</h1>
+        <p>This will add suppliers, items, weeks, and sample data to your database.</p>
+        
+        <button id="seedBtn" onclick="seedDatabase()">Seed Database</button>
+        <button onclick="checkData()">Check Current Data</button>
+        <button onclick="clearStatus()">Clear Status</button>
+        
+        <div id="status" class="status"></div>
+    </div>
+
+    <script type="module">
+        // Import Supabase from your app
+        const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || prompt('Enter your Supabase URL:');
+        const supabaseKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || prompt('Enter your Supabase Anon Key:');
+        
+        if (!supabaseUrl || !supabaseKey) {
+            document.getElementById('status').innerHTML = '<span class="error">❌ Missing Supabase credentials. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file or enter them when prompted.</span>';
+        }
+
+        // Use the Supabase client from CDN since we can't import from the app
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        window.supabase = supabase;
+
+        async function addStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            status.innerHTML += `<span class="${className}">${message}\n</span>`;
+            status.scrollTop = status.scrollHeight;
+        }
+
+        window.seedDatabase = async function() {
+            const btn = document.getElementById('seedBtn');
+            btn.disabled = true;
+            document.getElementById('status').innerHTML = '';
+            
+            try {
+                addStatus('🚀 Starting database seed...', 'info');
+                
+                // 1. Insert Suppliers
+                addStatus('📦 Adding suppliers...', 'info');
+                const { data: suppliers, error: suppliersError } = await supabase
+                    .from('suppliers')
+                    .upsert([
+                        { name: 'Fresh Farms Inc', email: 'supplier1@freshfarms.com' },
+                        { name: 'Berry Best Co', email: 'supplier2@berrybest.com' },
+                        { name: 'Organic Growers', email: 'supplier3@organicgrowers.com' },
+                        { name: 'Valley Fresh', email: 'supplier4@valleyfresh.com' },
+                        { name: 'Premium Produce', email: 'supplier5@premiumproduce.com' }
+                    ], { onConflict: 'email' })
+                    .select();
+                
+                if (suppliersError) throw suppliersError;
+                addStatus(`✅ Added ${suppliers.length} suppliers`, 'success');
+                
+                // 2. Insert Items
+                addStatus('📦 Adding items...', 'info');
+                const { data: items, error: itemsError } = await supabase
+                    .from('items')
+                    .upsert([
+                        { name: 'Strawberry', pack_size: '4×2 lb', category: 'strawberry', organic_flag: 'CONV', display_order: 1 },
+                        { name: 'Strawberry', pack_size: '8×1 lb', category: 'strawberry', organic_flag: 'ORG', display_order: 2 },
+                        { name: 'Blueberry', pack_size: '18 oz', category: 'blueberry', organic_flag: 'CONV', display_order: 3 },
+                        { name: 'Blueberry', pack_size: 'Pint', category: 'blueberry', organic_flag: 'ORG', display_order: 4 },
+                        { name: 'Blackberry', pack_size: '12×6 oz', category: 'blackberry', organic_flag: 'CONV', display_order: 5 },
+                        { name: 'Blackberry', pack_size: '12×6 oz', category: 'blackberry', organic_flag: 'ORG', display_order: 6 },
+                        { name: 'Raspberry', pack_size: '12×6 oz', category: 'raspberry', organic_flag: 'CONV', display_order: 7 },
+                        { name: 'Raspberry', pack_size: '12×6 oz', category: 'raspberry', organic_flag: 'ORG', display_order: 8 }
+                    ], { onConflict: 'name,pack_size' })
+                    .select();
+                
+                if (itemsError) throw itemsError;
+                addStatus(`✅ Added ${items.length} items`, 'success');
+                
+                // 3. Insert Weeks
+                addStatus('📅 Adding weeks...', 'info');
+                const { data: weeks, error: weeksError } = await supabase
+                    .from('weeks')
+                    .upsert([
+                        { week_number: 1, start_date: '2025-01-01', end_date: '2025-01-07', status: 'closed' },
+                        { week_number: 2, start_date: '2025-01-08', end_date: '2025-01-14', status: 'closed' },
+                        { week_number: 3, start_date: '2025-01-15', end_date: '2025-01-21', status: 'closed' },
+                        { week_number: 4, start_date: '2025-01-22', end_date: '2025-01-28', status: 'closed' },
+                        { week_number: 5, start_date: '2025-01-29', end_date: '2025-02-04', status: 'closed' },
+                        { week_number: 6, start_date: '2025-02-05', end_date: '2025-02-11', status: 'open' }
+                    ], { onConflict: 'week_number' })
+                    .select();
+                
+                if (weeksError) throw weeksError;
+                addStatus(`✅ Added ${weeks.length} weeks`, 'success');
+                
+                // 4. Get all IDs for quotes
+                const allSuppliers = suppliers;
+                const allItems = items;
+                const closedWeeks = weeks.filter(w => w.status === 'closed');
+                
+                // 5. Insert Quotes for closed weeks
+                addStatus('💰 Adding sample quotes...', 'info');
+                let quoteCount = 0;
+                
+                for (const week of closedWeeks) {
+                    for (const supplier of allSuppliers) {
+                        for (const item of allItems) {
+                            const supplierFob = Math.round((15 + Math.random() * 3) * 100) / 100;
+                            const supplierDlvd = Math.round((18 + Math.random() * 3) * 100) / 100;
+                            const rfCounterFob = Math.round((14.5 + Math.random() * 2.5) * 100) / 100;
+                            const response = Math.random() > 0.5 ? 'accept' : 'revise';
+                            const revisedFob = response === 'revise' ? Math.round((14.75 + Math.random() * 2) * 100) / 100 : null;
+                            const rfFinalFob = Math.round((14.5 + Math.random() * 2) * 100) / 100;
+                            
+                            const { error: quoteError } = await supabase
+                                .from('quotes')
+                                .upsert({
+                                    week_id: week.id,
+                                    item_id: item.id,
+                                    supplier_id: supplier.id,
+                                    supplier_fob: supplierFob,
+                                    supplier_dlvd: supplierDlvd,
+                                    rf_counter_fob: rfCounterFob,
+                                    supplier_response: response,
+                                    supplier_revised_fob: revisedFob,
+                                    rf_final_fob: rfFinalFob
+                                }, { onConflict: 'week_id,item_id,supplier_id' });
+                            
+                            if (quoteError) {
+                                addStatus(`⚠️ Warning: ${quoteError.message}`, 'warning');
+                            } else {
+                                quoteCount++;
+                            }
+                        }
+                    }
+                }
+                
+                addStatus(`✅ Added ${quoteCount} quotes`, 'success');
+                addStatus('\n🎉 Database seeding complete!', 'success');
+                addStatus('\n✅ You can now refresh your app and see all the data!', 'success');
+                
+            } catch (error) {
+                addStatus(`\n❌ Error: ${error.message}`, 'error');
+                console.error('Seed error:', error);
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        window.checkData = async function() {
+            document.getElementById('status').innerHTML = '';
+            addStatus('🔍 Checking current data...', 'info');
+            
+            try {
+                const [suppliers, items, weeks, quotes] = await Promise.all([
+                    supabase.from('suppliers').select('id', { count: 'exact' }),
+                    supabase.from('items').select('id', { count: 'exact' }),
+                    supabase.from('weeks').select('id', { count: 'exact' }),
+                    supabase.from('quotes').select('id', { count: 'exact' })
+                ]);
+                
+                addStatus(`\n📊 Current Database Status:`, 'info');
+                addStatus(`Suppliers: ${suppliers.count || 0}`, suppliers.count > 0 ? 'success' : 'warning');
+                addStatus(`Items: ${items.count || 0}`, items.count > 0 ? 'success' : 'warning');
+                addStatus(`Weeks: ${weeks.count || 0}`, weeks.count > 0 ? 'success' : 'warning');
+                addStatus(`Quotes: ${quotes.count || 0}`, quotes.count > 0 ? 'success' : 'warning');
+                
+            } catch (error) {
+                addStatus(`❌ Error checking data: ${error.message}`, 'error');
+            }
+        };
+
+        window.clearStatus = function() {
+            document.getElementById('status').innerHTML = '';
+        };
+
+        // Auto-check on load
+        window.checkData();
+    </script>
+</body>
+</html>
+
