@@ -346,9 +346,11 @@ export function RFDashboard() {
     const hasFinals = Object.entries(finalInputs).filter(([_, v]) => v).length > 0;
     const hasSupplierResponses = quotes.some(q => q.supplier_response !== null);
     const hasExistingCounters = quotes.some(q => q.rf_counter_fob !== null);
+    const hasSupplierPrices = quotes.some(q => q.supplier_fob !== null);
 
-    if (!hasCounters && !hasFinals && !hasSupplierResponses && !hasExistingCounters) {
-      // Quiet UI: No warning during planning
+    // Allow finalization if there are any quotes with supplier prices, even without manual inputs
+    if (!hasCounters && !hasFinals && !hasSupplierResponses && !hasExistingCounters && !hasSupplierPrices) {
+      showToast('No pricing data to finalize. Please enter supplier prices first.', 'error');
       return;
     }
 
@@ -358,6 +360,7 @@ export function RFDashboard() {
       let counterCount = 0;
       let finalCount = 0;
 
+      // First, send any counters that were entered
       if (hasCounters) {
         for (const [itemId, value] of Object.entries(counterInputs)) {
           if (!value) continue;
@@ -370,9 +373,9 @@ export function RFDashboard() {
         }
       }
 
-      // Finalize if: manual entries, supplier responses, OR existing counters (RF wants to finalize)
-      if (hasFinals || hasSupplierResponses || hasExistingCounters) {
-        // Process manually entered final prices
+      // Then, set final prices for all quotes that need them
+      // Process manually entered final prices first
+      if (hasFinals) {
         for (const [itemId, value] of Object.entries(finalInputs)) {
           if (!value) continue;
           const quote = quotes.find(q => q.item_id === itemId);
@@ -382,35 +385,38 @@ export function RFDashboard() {
           const success = await updateRFFinal(quote.id, final);
           if (success) finalCount++;
         }
+      }
 
-        // Auto-finalize logic: handle quotes that need finalization
-        // (accepted counters are already auto-finalized when supplier responds)
-        for (const quote of quotes) {
-          if (!quote.rf_final_fob && !finalInputs[quote.item_id] && quote.supplier_fob !== null) {
-            // Supplier revised - RF needs to review and finalize
-            if (quote.supplier_revised_fob) {
-              await updateRFFinal(quote.id, quote.supplier_revised_fob);
-              finalCount++;
-            } 
-            // Supplier accepted counter - already auto-finalized, skip
-            // (quote.rf_counter_fob && quote.supplier_response === 'accept' is handled automatically)
-            // Counter exists but no supplier response yet - finalize to counter price
-            else if (quote.rf_counter_fob && !quote.supplier_response) {
-              await updateRFFinal(quote.id, quote.rf_counter_fob);
-              finalCount++;
-            }
-            // Counter exists and supplier accepted - should already be auto-finalized, but double-check
-            else if (quote.rf_counter_fob && quote.supplier_response === 'accept') {
-              // Should already be auto-finalized, but if not, set it now
-              await updateRFFinal(quote.id, quote.rf_counter_fob);
-              finalCount++;
-            }
-            // Direct accept (no counter) - finalize to supplier's price
-            else if (!quote.rf_counter_fob) {
-              await updateRFFinal(quote.id, quote.supplier_fob);
-              finalCount++;
-            }
-          }
+      // Auto-finalize logic: handle ALL quotes that need finalization
+      for (const quote of quotes) {
+        // Skip if already has final price
+        if (quote.rf_final_fob) continue;
+        
+        // Skip if manually entered in finalInputs (already processed above)
+        if (finalInputs[quote.item_id]) continue;
+        
+        // Only process quotes with supplier prices
+        if (quote.supplier_fob === null) continue;
+
+        // Supplier revised - RF should use revised price
+        if (quote.supplier_revised_fob) {
+          const success = await updateRFFinal(quote.id, quote.supplier_revised_fob);
+          if (success) finalCount++;
+        } 
+        // Supplier accepted counter - use counter price
+        else if (quote.rf_counter_fob && quote.supplier_response === 'accept') {
+          const success = await updateRFFinal(quote.id, quote.rf_counter_fob);
+          if (success) finalCount++;
+        }
+        // Counter exists but no supplier response yet - finalize to counter price
+        else if (quote.rf_counter_fob && !quote.supplier_response) {
+          const success = await updateRFFinal(quote.id, quote.rf_counter_fob);
+          if (success) finalCount++;
+        }
+        // No counter, just supplier price - finalize to supplier's price
+        else if (!quote.rf_counter_fob && quote.supplier_fob) {
+          const success = await updateRFFinal(quote.id, quote.supplier_fob);
+          if (success) finalCount++;
         }
       }
 
@@ -422,11 +428,19 @@ export function RFDashboard() {
         showToast(messages.join(', '), 'success');
         setCounterInputs({});
         setFinalInputs({});
+        // Reload quotes and week data to refresh supplier statuses
+        await loadQuotes();
         await loadWeekData();
-        setSelectedSupplier(null);
+        // Don't clear selectedSupplier - let user see the results
       } else {
-        showToast('No changes were made', 'error');
+        showToast('No changes were made. All prices may already be finalized.', 'info');
+        // Still reload to check if finalize button should appear
+        await loadQuotes();
+        await loadWeekData();
       }
+    } catch (err) {
+      logger.error('Error in handlePushToFinalize:', err);
+      showToast('Failed to finalize prices. Please try again.', 'error');
     } finally {
       setSubmittingCounters(false);
       setSubmittingFinals(false);
@@ -575,10 +589,11 @@ export function RFDashboard() {
 
   // Pricing Finalization Gates:
   // - Week must be 'open' status
-  // - At least one supplier must have finalized pricing (rf_final_fob set)
+  // - At least one quote must have finalized pricing (rf_final_fob set)
   // - finalizePricingForWeek() validates that at least one quote has rf_final_fob
   const allFinalPricesSet = quotes.length > 0 && quotes.every(q => q.rf_final_fob !== null);
-  const canFinalizePricing = selectedWeek?.status === 'open' && finalizedSuppliers.length > 0;
+  const hasAnyFinalPrices = quotes.some(q => q.rf_final_fob !== null);
+  const canFinalizePricing = selectedWeek?.status === 'open' && (finalizedSuppliers.length > 0 || hasAnyFinalPrices);
   const isPricingFinalized = selectedWeek?.status === 'finalized';
 
   return (
