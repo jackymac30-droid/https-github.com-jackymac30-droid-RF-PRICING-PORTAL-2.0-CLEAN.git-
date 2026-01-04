@@ -241,14 +241,13 @@ export function RFDashboard() {
 
     setExpandedItem(itemId);
 
-    if (!itemQuotes[itemId]) {
-      try {
-        // Load all quotes for this SKU across all suppliers
-        const quotes = await getQuotesForItem(selectedWeek.id, itemId);
-        setItemQuotes(prev => ({ ...prev, [itemId]: quotes }));
-      } catch (err) {
-        logger.error('Error loading item quotes:', err);
-      }
+    // Always reload to get latest data
+    try {
+      // Load all quotes for this SKU across all suppliers
+      const quotes = await getQuotesForItem(selectedWeek.id, itemId);
+      setItemQuotes(prev => ({ ...prev, [itemId]: quotes }));
+    } catch (err) {
+      logger.error('Error loading item quotes:', err);
     }
   }
 
@@ -1446,7 +1445,7 @@ export function RFDashboard() {
                         </tr>
                         {isExpanded && (
                           <tr>
-                            <td colSpan={8} className="px-0 py-0">
+                            <td colSpan={9} className="px-0 py-0">
                               <div className="bg-white/5 backdrop-blur-sm px-6 py-4 border-t border-b border-white/5">
                                 <h4 className="font-bold text-base text-white mb-3">All Supplier Quotes - {item.name} {item.organic_flag}</h4>
                                 <div className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 overflow-hidden">
