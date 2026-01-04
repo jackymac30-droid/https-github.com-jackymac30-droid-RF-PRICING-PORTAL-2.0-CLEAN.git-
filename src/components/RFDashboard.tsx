@@ -1173,18 +1173,9 @@ export function RFDashboard() {
                   {(expandedCard === 'finalized' ? finalizedSuppliers : finalizedSuppliers.slice(0, 2)).map(supplier => (
                     <button
                       key={supplier.id}
-                      onClick={async (e) => {
+                      onClick={(e) => {
                         e.stopPropagation();
-                        try {
-                          setSelectedSupplier(supplier);
-                          // Pre-load quotes to catch any errors early
-                          if (selectedWeek) {
-                            await fetchQuotesWithDetails(selectedWeek.id, supplier.id);
-                          }
-                        } catch (err) {
-                          logger.error('Error loading supplier quotes:', err);
-                          showToast('Failed to load supplier quotes. Please try again.', 'error');
-                        }
+                        setSelectedSupplier(supplier);
                       }}
                       className="w-full text-left px-2 py-1 text-xs text-white/80 font-medium hover:text-emerald-300 rounded transition-all truncate hover:bg-white/5"
                     >
