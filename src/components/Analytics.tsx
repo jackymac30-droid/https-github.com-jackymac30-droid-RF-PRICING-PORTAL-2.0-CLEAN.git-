@@ -1016,6 +1016,7 @@ export function Analytics() {
       
       if (validWeeks.length === 0) {
         logger.debug('No closed/finalized weeks found for analytics');
+        logger.warn('Analytics requires closed or finalized weeks. Please seed the database or close some weeks.');
         setHistoricalData([]);
         setLoading(false);
         return;
@@ -1214,6 +1215,52 @@ export function Analytics() {
         <div className="text-center">
           <div className="animate-spin w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
           <p className="text-white/70">Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state: no closed weeks
+  if (weeks.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <LineChart className="w-16 h-16 text-white/30 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-white mb-2">No Historical Data Available</h3>
+          <p className="text-white/60 mb-4">
+            Analytics requires closed or finalized weeks with pricing data. Please seed the database or close some weeks to generate analytics.
+          </p>
+          <div className="bg-white/5 rounded-lg border border-white/10 p-4 text-left text-sm text-white/70">
+            <p className="font-semibold mb-2">To get started:</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>Click "Seed Database" to populate with sample data</li>
+              <li>Or close weeks after completing pricing workflows</li>
+              <li>Analytics will automatically appear once data is available</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state: no historical data calculated
+  if (historicalData.length === 0 && !loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <BarChart3 className="w-16 h-16 text-white/30 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-white mb-2">No Analytics Data</h3>
+          <p className="text-white/60 mb-4">
+            Found {weeks.length} closed week(s), but no pricing data was found. Please ensure quotes exist for these weeks.
+          </p>
+          <div className="bg-white/5 rounded-lg border border-white/10 p-4 text-left text-sm text-white/70">
+            <p className="font-semibold mb-2">Debug Info:</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>{weeks.length} closed week(s) found</li>
+              <li>No quotes with pricing data found</li>
+              <li>Try seeding the database to populate sample data</li>
+            </ul>
+          </div>
         </div>
       </div>
     );

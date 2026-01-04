@@ -8,6 +8,16 @@ import { fetchSuppliers, fetchItems, fetchWeeks } from './database';
 export async function seedDatabase(): Promise<{ success: boolean; message: string }> {
   try {
     console.log('🌱 Starting database seed...');
+    
+    // Check if database tables exist
+    const { data: tablesCheck, error: tablesError } = await supabase
+      .from('suppliers')
+      .select('id')
+      .limit(1);
+    
+    if (tablesError && tablesError.message.includes('does not exist')) {
+      throw new Error('Database tables do not exist. Please run the database migrations first in Supabase SQL Editor.');
+    }
 
     // 1. Insert Suppliers
     console.log('📦 Adding suppliers...');
@@ -201,12 +211,24 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
     }
 
     // Wait for all quotes to be inserted
-    await Promise.all(quotePromises);
+    const quoteResults = await Promise.all(quotePromises);
+    const quoteErrors = quoteResults.filter(r => r.error).length;
+    if (quoteErrors > 0) {
+      console.warn(`⚠️ ${quoteErrors} quotes failed to insert`);
+    }
     console.log(`✅ Added ${quoteCount} complete workflow quotes`);
+
+    // Verify data was actually inserted
+    const { data: verifySuppliers } = await supabase.from('suppliers').select('id');
+    const { data: verifyItems } = await supabase.from('items').select('id');
+    const { data: verifyWeeks } = await supabase.from('weeks').select('id').eq('status', 'closed');
+    const { data: verifyQuotes } = await supabase.from('quotes').select('id');
+
+    const verifyMessage = `Verification: ${verifySuppliers?.length || 0} suppliers, ${verifyItems?.length || 0} items, ${verifyWeeks?.length || 0} closed weeks, ${verifyQuotes?.length || 0} quotes in database`;
 
     return {
       success: true,
-      message: `Successfully seeded database: ${suppliers.length} suppliers, ${items.length} items, ${weeks.length} weeks, ${quoteCount} quotes`
+      message: `Successfully seeded database: ${suppliers.length} suppliers, ${items.length} items, ${weeks.length} weeks, ${quoteCount} quotes. ${verifyMessage}`
     };
   } catch (error: any) {
     console.error('Seed error:', error);
