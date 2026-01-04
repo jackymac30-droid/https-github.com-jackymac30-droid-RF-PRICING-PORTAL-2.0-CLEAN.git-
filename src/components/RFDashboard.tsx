@@ -504,9 +504,7 @@ export function RFDashboard() {
         // Update the selected week state immediately
         const updatedWeek = { 
           ...selectedWeek, 
-          status: 'finalized' as const, 
-          finalized_at: new Date().toISOString(), 
-          finalized_by: session?.user_name || 'RF Manager' 
+          status: 'finalized' as const
         };
         setSelectedWeek(updatedWeek);
         
