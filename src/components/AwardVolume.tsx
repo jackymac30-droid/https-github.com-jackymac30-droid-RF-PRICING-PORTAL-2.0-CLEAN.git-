@@ -102,17 +102,12 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     setLoading(true);
     if (!selectedWeek) return;
 
-    logger.debug('Loading data for week:', selectedWeek.week_number);
-
     try {
       const [itemsData, volumeNeedsData, lastWeekPricesData] = await Promise.all([
         fetchItems(),
         fetchVolumeNeeds(selectedWeek.id),
         fetchLastWeekDeliveredPrices(selectedWeek.week_number)
       ]);
-
-      logger.log('Items loaded:', itemsData.length);
-      logger.log('Volume needs loaded:', volumeNeedsData.length);
 
       setItems(itemsData);
 
@@ -137,14 +132,11 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
   async function loadVolumeData() {
     if (!selectedWeek || items.length === 0) return;
 
-    logger.debug('Loading volume data for week:', selectedWeek.id);
-
     try {
       const [quotes, pricingData] = await Promise.all([
         fetchQuotesWithDetails(selectedWeek.id),
         fetchItemPricingCalculations(selectedWeek.id)
       ]);
-      logger.debug('Fetched quotes:', quotes.length, 'pricing calculations:', pricingData.length);
 
       // Create a map of item_id -> { dlvd_price, margin } from internal pricing calculations
       const pricingMap = new Map<string, { dlvd_price: number; margin: number }>();
@@ -242,7 +234,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         // awarded_volume: RF's draft award (before sending to supplier)
         const awarded_volume = volume > 0 ? volume : null;
 
-        logger.debug('Saving awarded volume:', { week_id, supplier_id, item_id, awarded_volume });
+        // Saving awarded volume
 
         const { supabase } = await import('../utils/supabase');
         const { data, error } = await supabase

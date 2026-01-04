@@ -51,7 +51,7 @@ export function Login() {
         const suppliersData = await fetchSuppliers();
         setSuppliers(suppliersData);
       } catch (err) {
-        console.error('Failed to load suppliers:', err);
+        // Failed to load suppliers
       } finally {
         setLoadingSuppliers(false);
       }

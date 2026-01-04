@@ -16,7 +16,8 @@ import {
   createNewWeek,
   finalizePricingForWeek,
   updateWeekStatus,
-  enforceWeekStatusHygiene
+  enforceWeekStatusHygiene,
+  fetchVolumeNeeds
 } from '../utils/database';
 import { sendPricingReminder } from '../utils/emailService';
 import type { Week, Item, Supplier, QuoteWithDetails } from '../types';
@@ -68,6 +69,7 @@ export function RFDashboard() {
   const [finalizingPricing, setFinalizingPricing] = useState(false);
   const [sendingReminders, setSendingReminders] = useState<Record<string, boolean>>({});
   const [finalizingItems, setFinalizingItems] = useState<Record<string, boolean>>({});
+  const [volumeNeedsMap, setVolumeNeedsMap] = useState<Map<string, number>>(new Map());
   const [volumeNeeds, setVolumeNeeds] = useState<Record<string, number>>({});
 
   // Listen for navigation to Volume Acceptance from Award Volume
@@ -133,7 +135,7 @@ export function RFDashboard() {
         logger.warn('No suppliers found in database');
         showToast('No suppliers found. Please add suppliers to the database.', 'warning');
       } else {
-        logger.debug(`Loaded ${suppliersData.length} suppliers`);
+        // Suppliers loaded successfully
       }
 
       // Batch fetch all quotes at once instead of sequential loop (N+1 optimization)
@@ -231,8 +233,23 @@ export function RFDashboard() {
   useEffect(() => {
     if (selectedWeek) {
       loadWeekData();
+      loadVolumeNeeds();
     }
   }, [selectedWeek, loadWeekData]);
+
+  async function loadVolumeNeeds() {
+    if (!selectedWeek) return;
+    try {
+      const volumeData = await fetchVolumeNeeds(selectedWeek.id);
+      const volumeMap = new Map<string, number>();
+      volumeData.forEach(v => {
+        volumeMap.set(v.item_id, v.volume_needed || 0);
+      });
+      setVolumeNeedsMap(volumeMap);
+    } catch (err) {
+      logger.error('Error loading volume needs:', err);
+    }
+  }
 
   useEffect(() => {
     if (selectedWeek && selectedSupplier) {
@@ -1232,51 +1249,71 @@ export function RFDashboard() {
             {/* Blended Cost Summary - Show when items are finalized */}
             {(() => {
               const finalizedItems = items.filter(item => {
-                const itemQuotes = itemQuotes[item.id] || [];
-                return itemQuotes.some(q => q.rf_final_fob !== null);
+                const quotes = itemQuotes[item.id] || [];
+                return quotes.some(q => q.rf_final_fob !== null);
               });
               
               if (finalizedItems.length > 0) {
-                // Calculate blended cost for finalized items
+                // Calculate blended cost for finalized items using actual volumes
                 let totalBlendedCost = 0;
                 let totalVolume = 0;
                 
                 finalizedItems.forEach(item => {
                   const quotes = itemQuotes[item.id] || [];
-                  const finalizedQuotes = quotes.filter(q => q.rf_final_fob !== null);
+                  const finalizedQuotes = quotes.filter(q => q.rf_final_fob !== null && q.awarded_volume && q.awarded_volume > 0);
                   
-                  // Get volume from week_item_volumes or use estimated volume
-                  const itemVolume = 1000; // TODO: Get actual volume from week_item_volumes
-                  
+                  // Get actual volume from awarded_volume or volume_needed
+                  let itemVolume = 0;
                   if (finalizedQuotes.length > 0) {
-                    // Calculate weighted average FOB
+                    // Use awarded volumes if available
+                    itemVolume = finalizedQuotes.reduce((sum, q) => sum + (q.awarded_volume || 0), 0);
+                  }
+                  
+                  // Fallback to volume_needed if no awarded volumes yet
+                  if (itemVolume === 0) {
+                    itemVolume = volumeNeedsMap.get(item.id) || 0;
+                  }
+                  
+                  if (finalizedQuotes.length > 0 && itemVolume > 0) {
+                    // Calculate weighted average FOB based on awarded volumes
+                    const totalAwardedVolume = finalizedQuotes.reduce((sum, q) => sum + (q.awarded_volume || 0), 0);
                     const weightedFOB = finalizedQuotes.reduce((sum, q) => {
-                      // Use equal weighting for now (will use actual volumes later)
-                      return sum + (q.rf_final_fob || 0);
-                    }, 0) / finalizedQuotes.length;
+                      const volume = q.awarded_volume || 0;
+                      return sum + ((q.rf_final_fob || 0) * volume);
+                    }, 0) / totalAwardedVolume;
                     
-                    // Blended cost = FOB + Rebate + Freight (using defaults for now)
+                    // Blended cost = FOB + Rebate + Freight
                     const rebate = 0.80;
                     const freight = 1.75;
                     const blendedCost = weightedFOB + rebate + freight;
                     
                     totalBlendedCost += blendedCost * itemVolume;
                     totalVolume += itemVolume;
+                  } else if (finalizedQuotes.length > 0) {
+                    // If no volumes yet, use simple average
+                    const avgFOB = finalizedQuotes.reduce((sum, q) => sum + (q.rf_final_fob || 0), 0) / finalizedQuotes.length;
+                    const rebate = 0.80;
+                    const freight = 1.75;
+                    const blendedCost = avgFOB + rebate + freight;
+                    // Use estimated volume for display
+                    const estimatedVolume = volumeNeedsMap.get(item.id) || 1000;
+                    totalBlendedCost += blendedCost * estimatedVolume;
+                    totalVolume += estimatedVolume;
                   }
                 });
                 
                 const avgBlendedCost = totalVolume > 0 ? totalBlendedCost / totalVolume : 0;
                 
                 return (
-                  <div className="mb-4 bg-gradient-to-r from-emerald-500/20 to-lime-500/20 border-2 border-emerald-400/50 rounded-xl p-4 backdrop-blur-sm">
+                  <div className="mb-4 bg-gradient-to-r from-emerald-500/20 to-lime-500/20 border-2 border-emerald-400/50 rounded-xl p-4 backdrop-blur-sm shadow-lg">
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Blended Cost Summary</h3>
-                        <p className="text-xs text-white/80">{finalizedItems.length} item{finalizedItems.length !== 1 ? 's' : ''} finalized</p>
+                        <p className="text-xs text-white/80">{finalizedItems.length} item{finalizedItems.length !== 1 ? 's' : ''} finalized • {totalVolume.toLocaleString()} total cases</p>
                       </div>
                       <div className="text-right">
                         <div className="text-2xl font-black text-emerald-200">{formatCurrency(avgBlendedCost)}</div>
-                        <div className="text-xs text-white/60">Avg Blended Cost</div>
+                        <div className="text-xs text-white/60">Weighted Avg Blended Cost</div>
                       </div>
                     </div>
                   </div>
@@ -1385,13 +1422,27 @@ export function RFDashboard() {
                           </td>
                           <td className="px-6 py-5">
                             {(() => {
-                              // Calculate blended cost for this item
+                              // Calculate blended cost for this item using actual volumes
                               const itemQuotesList = allQuotes.length > 0 ? allQuotes : (quote ? [quote] : []);
                               const finalizedQuotes = itemQuotesList.filter(q => q.rf_final_fob !== null);
                               
                               if (finalizedQuotes.length > 0) {
-                                // Calculate weighted average FOB (using equal weighting for now)
-                                const avgFOB = finalizedQuotes.reduce((sum, q) => sum + (q.rf_final_fob || 0), 0) / finalizedQuotes.length;
+                                // Get volumes from awarded_volume or volume_needed
+                                const quotesWithVolume = finalizedQuotes.filter(q => q.awarded_volume && q.awarded_volume > 0);
+                                const totalVolume = quotesWithVolume.reduce((sum, q) => sum + (q.awarded_volume || 0), 0) || volumeNeedsMap.get(item.id) || 0;
+                                
+                                let avgFOB = 0;
+                                if (quotesWithVolume.length > 0 && totalVolume > 0) {
+                                  // Weighted average based on awarded volumes
+                                  avgFOB = quotesWithVolume.reduce((sum, q) => {
+                                    const volume = q.awarded_volume || 0;
+                                    return sum + ((q.rf_final_fob || 0) * volume);
+                                  }, 0) / totalVolume;
+                                } else {
+                                  // Simple average if no volumes yet
+                                  avgFOB = finalizedQuotes.reduce((sum, q) => sum + (q.rf_final_fob || 0), 0) / finalizedQuotes.length;
+                                }
+                                
                                 // Blended cost = FOB + Rebate + Freight
                                 const rebate = 0.80;
                                 const freight = 1.75;
@@ -1400,7 +1451,9 @@ export function RFDashboard() {
                                 return (
                                   <div className="text-right">
                                     <div className="font-black text-emerald-300 text-base">{formatCurrency(blendedCost)}</div>
-                                    <div className="text-xs text-white/60 mt-0.5">Blended</div>
+                                    <div className="text-xs text-white/60 mt-0.5">
+                                      {quotesWithVolume.length > 0 ? 'Weighted' : 'Avg'} Blended
+                                    </div>
                                   </div>
                                 );
                               }
