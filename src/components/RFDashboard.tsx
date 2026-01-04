@@ -1230,8 +1230,9 @@ export function RFDashboard() {
                                   ...prev,
                                   [item.id]: e.target.value
                                 }))}
-                                className="w-32 px-4 py-2.5 border-2 border-orange-400/30 rounded-lg text-base font-bold focus:outline-none focus:ring-4 focus:ring-orange-400/50 focus:border-orange-400/50 bg-white/8 backdrop-blur-sm text-white placeholder:text-white/40 shadow-lg"
+                                className="w-32 px-4 py-2.5 border-2 border-orange-400/30 rounded-lg text-base font-bold focus:outline-none focus:ring-4 focus:ring-orange-400/50 focus:border-orange-400/50 bg-white/10 backdrop-blur-sm text-white placeholder:text-white/40 shadow-lg"
                                 placeholder="0.00"
+                                style={{ color: '#ffffff' }}
                               />
                             ) : (
                               <span className="inline-flex items-center px-4 py-2 bg-orange-500/20 border-2 border-orange-400/40 rounded-lg text-base font-black text-orange-200 backdrop-blur-sm shadow-lg">
@@ -1262,8 +1263,9 @@ export function RFDashboard() {
                                   ...prev,
                                   [item.id]: e.target.value
                                 }))}
-                                className="w-32 px-4 py-2.5 border-2 border-green-400/30 rounded-lg text-base font-bold focus:outline-none focus:ring-4 focus:ring-green-400/50 focus:border-green-400/50 bg-white/8 backdrop-blur-sm text-white placeholder:text-white/40 shadow-lg"
+                                className="w-32 px-4 py-2.5 border-2 border-green-400/30 rounded-lg text-base font-bold focus:outline-none focus:ring-4 focus:ring-green-400/50 focus:border-green-400/50 bg-white/10 backdrop-blur-sm text-white placeholder:text-white/40 shadow-lg"
                                 placeholder={quote.rf_counter_fob ? quote.rf_counter_fob.toString() : "0.00"}
+                                style={{ color: '#ffffff' }}
                               />
                             ) : (
                               <div className="flex flex-col gap-1">
