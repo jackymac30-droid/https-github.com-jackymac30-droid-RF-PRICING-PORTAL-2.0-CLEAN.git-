@@ -1,6 +1,10 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  ignore = "*.md"
+
+[build.environment]
+  NODE_VERSION = "18"
 
 [[redirects]]
   from = "/*"
