@@ -1169,11 +1169,12 @@ export function Analytics() {
       setHistoricalData(allData);
     } catch (err) {
       logger.error('Error calculating historical analytics:', err);
+      console.error('Analytics error details:', err);
       setHistoricalData([]);
     } finally {
       setLoading(false);
     }
-  }, [weeks]);
+  }, [weeks.length]);
 
   // Summary metrics - all calculations verified for accuracy
   const summaryMetrics = useMemo(() => {
