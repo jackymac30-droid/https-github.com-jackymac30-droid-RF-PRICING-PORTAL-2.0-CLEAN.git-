@@ -10,8 +10,7 @@ import {
   fetchLastWeekDeliveredPrices,
   fetchItemPricingCalculations,
   fetchSuppliers,
-  finalizePricingForWeek,
-  getSuppliersWithSubmissions
+  finalizePricingForWeek
 } from '../utils/database';
 import { sendPricingReminder } from '../utils/emailService';
 import { formatCurrency } from '../utils/helpers';
