@@ -67,6 +67,8 @@ export function RFDashboard() {
   const [creatingWeek, setCreatingWeek] = useState(false);
   const [finalizingPricing, setFinalizingPricing] = useState(false);
   const [sendingReminders, setSendingReminders] = useState<Record<string, boolean>>({});
+  const [finalizingItems, setFinalizingItems] = useState<Record<string, boolean>>({});
+  const [volumeNeeds, setVolumeNeeds] = useState<Record<string, number>>({});
 
   // Listen for navigation to Volume Acceptance from Award Volume
   useEffect(() => {
@@ -491,6 +493,46 @@ export function RFDashboard() {
       }
     } finally {
       setCreatingWeek(false);
+    }
+  };
+
+  const handleFinalizeItem = async (itemId: string) => {
+    if (!selectedWeek || finalizingItems[itemId]) return;
+
+    setFinalizingItems(prev => ({ ...prev, [itemId]: true }));
+    try {
+      // Get all quotes for this item
+      const itemQuotesList = itemQuotes[itemId] || [];
+      const quotesToFinalize = itemQuotesList.filter(q => !q.rf_final_fob && q.supplier_fob !== null);
+      
+      if (quotesToFinalize.length === 0) {
+        showToast('No quotes to finalize for this item', 'info');
+        return;
+      }
+
+      let finalizedCount = 0;
+      for (const quote of quotesToFinalize) {
+        // Use supplier revised price if available, otherwise use counter or supplier price
+        const finalPrice = quote.supplier_revised_fob || quote.rf_counter_fob || quote.supplier_fob;
+        if (finalPrice) {
+          const success = await updateRFFinal(quote.id, finalPrice);
+          if (success) finalizedCount++;
+        }
+      }
+
+      if (finalizedCount > 0) {
+        showToast(`${finalizedCount} quote(s) finalized for ${items.find(i => i.id === itemId)?.name}`, 'success');
+        // Reload quotes for this item
+        await toggleItemQuotes(itemId);
+        await loadQuotes();
+      } else {
+        showToast('No quotes were finalized', 'info');
+      }
+    } catch (err) {
+      logger.error('Error finalizing item:', err);
+      showToast('Failed to finalize item', 'error');
+    } finally {
+      setFinalizingItems(prev => ({ ...prev, [itemId]: false }));
     }
   };
 
@@ -1173,6 +1215,62 @@ export function RFDashboard() {
               </div>
             </div>
 
+            {/* Blended Cost Summary - Show when items are finalized */}
+            {(() => {
+              const finalizedItems = items.filter(item => {
+                const itemQuotes = itemQuotes[item.id] || [];
+                return itemQuotes.some(q => q.rf_final_fob !== null);
+              });
+              
+              if (finalizedItems.length > 0) {
+                // Calculate blended cost for finalized items
+                let totalBlendedCost = 0;
+                let totalVolume = 0;
+                
+                finalizedItems.forEach(item => {
+                  const quotes = itemQuotes[item.id] || [];
+                  const finalizedQuotes = quotes.filter(q => q.rf_final_fob !== null);
+                  
+                  // Get volume from week_item_volumes or use estimated volume
+                  const itemVolume = 1000; // TODO: Get actual volume from week_item_volumes
+                  
+                  if (finalizedQuotes.length > 0) {
+                    // Calculate weighted average FOB
+                    const weightedFOB = finalizedQuotes.reduce((sum, q) => {
+                      // Use equal weighting for now (will use actual volumes later)
+                      return sum + (q.rf_final_fob || 0);
+                    }, 0) / finalizedQuotes.length;
+                    
+                    // Blended cost = FOB + Rebate + Freight (using defaults for now)
+                    const rebate = 0.80;
+                    const freight = 1.75;
+                    const blendedCost = weightedFOB + rebate + freight;
+                    
+                    totalBlendedCost += blendedCost * itemVolume;
+                    totalVolume += itemVolume;
+                  }
+                });
+                
+                const avgBlendedCost = totalVolume > 0 ? totalBlendedCost / totalVolume : 0;
+                
+                return (
+                  <div className="mb-4 bg-gradient-to-r from-emerald-500/20 to-lime-500/20 border-2 border-emerald-400/50 rounded-xl p-4 backdrop-blur-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Blended Cost Summary</h3>
+                        <p className="text-xs text-white/80">{finalizedItems.length} item{finalizedItems.length !== 1 ? 's' : ''} finalized</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-black text-emerald-200">{formatCurrency(avgBlendedCost)}</div>
+                        <div className="text-xs text-white/60">Avg Blended Cost</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div className="overflow-x-auto bg-white/0">
               <table className="w-full">
                 <thead className="bg-gradient-to-r from-white/8 to-white/5 border-b-2 border-white/20">
@@ -1184,6 +1282,7 @@ export function RFDashboard() {
                     <th className="px-6 py-4 text-left text-xs font-black text-white uppercase tracking-wider">RF Counter</th>
                     <th className="px-6 py-4 text-left text-xs font-black text-white uppercase tracking-wider">Supplier Response</th>
                     <th className="px-6 py-4 text-left text-xs font-black text-white uppercase tracking-wider">RF Final</th>
+                    <th className="px-6 py-4 text-left text-xs font-black text-white uppercase tracking-wider">Blended Cost</th>
                     <th className="px-6 py-4 text-left text-xs font-black text-white uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
@@ -1271,13 +1370,78 @@ export function RFDashboard() {
                             )}
                           </td>
                           <td className="px-6 py-5">
-                            <button
-                              onClick={() => toggleItemQuotes(item.id)}
-                              className="flex items-center gap-1 px-4 py-2 text-sm bg-white/5 backdrop-blur-sm hover:bg-white/10 border border-white/10 rounded-lg transition-all font-semibold text-white shadow-lg hover:shadow-xl"
-                            >
-                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                              Quotes
-                            </button>
+                            {(() => {
+                              // Calculate blended cost for this item
+                              const itemQuotesList = allQuotes.length > 0 ? allQuotes : (quote ? [quote] : []);
+                              const finalizedQuotes = itemQuotesList.filter(q => q.rf_final_fob !== null);
+                              
+                              if (finalizedQuotes.length > 0) {
+                                // Calculate weighted average FOB (using equal weighting for now)
+                                const avgFOB = finalizedQuotes.reduce((sum, q) => sum + (q.rf_final_fob || 0), 0) / finalizedQuotes.length;
+                                // Blended cost = FOB + Rebate + Freight
+                                const rebate = 0.80;
+                                const freight = 1.75;
+                                const blendedCost = avgFOB + rebate + freight;
+                                
+                                return (
+                                  <div className="text-right">
+                                    <div className="font-black text-emerald-300 text-base">{formatCurrency(blendedCost)}</div>
+                                    <div className="text-xs text-white/60 mt-0.5">Blended</div>
+                                  </div>
+                                );
+                              }
+                              
+                              // Calculate projected blended cost if we finalize with current prices
+                              const projectedQuotes = itemQuotesList.filter(q => q.supplier_fob !== null);
+                              if (projectedQuotes.length > 0 && !isReadOnly) {
+                                const projectedFOB = projectedQuotes.reduce((sum, q) => {
+                                  const price = q.rf_final_fob || q.supplier_revised_fob || q.rf_counter_fob || q.supplier_fob || 0;
+                                  return sum + price;
+                                }, 0) / projectedQuotes.length;
+                                const rebate = 0.80;
+                                const freight = 1.75;
+                                const projectedBlended = projectedFOB + rebate + freight;
+                                
+                                return (
+                                  <div className="text-right">
+                                    <div className="font-bold text-white/60 text-sm">{formatCurrency(projectedBlended)}</div>
+                                    <div className="text-xs text-white/40 mt-0.5">Projected</div>
+                                  </div>
+                                );
+                              }
+                              
+                              return <span className="text-white/40">-</span>;
+                            })()}
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleItemQuotes(item.id)}
+                                className="flex items-center gap-1 px-4 py-2 text-sm bg-white/5 backdrop-blur-sm hover:bg-white/10 border border-white/10 rounded-lg transition-all font-semibold text-white shadow-lg hover:shadow-xl"
+                              >
+                                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                Quotes
+                              </button>
+                              {!isReadOnly && allQuotes.length > 0 && allQuotes.some(q => !q.rf_final_fob && q.supplier_fob !== null) && (
+                                <button
+                                  onClick={() => handleFinalizeItem(item.id)}
+                                  disabled={finalizingItems[item.id]}
+                                  className="flex items-center gap-1 px-3 py-2 text-xs bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 rounded-lg transition-all font-semibold text-emerald-200 shadow-lg hover:shadow-xl disabled:opacity-50"
+                                >
+                                  {finalizingItems[item.id] ? (
+                                    <>
+                                      <div className="animate-spin w-3 h-3 border-2 border-emerald-200 border-t-transparent rounded-full"></div>
+                                      Finalizing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle className="w-3 h-3" />
+                                      Finalize Item
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                         {isExpanded && (
