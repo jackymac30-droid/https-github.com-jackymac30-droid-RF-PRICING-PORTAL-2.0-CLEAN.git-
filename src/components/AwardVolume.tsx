@@ -64,6 +64,8 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
   useEffect(() => {
     if (selectedWeek) {
       loadData();
+    } else {
+      setLoading(false);
     }
   }, [selectedWeek]);
 
@@ -93,15 +95,20 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       fetchVolumeNeeds(selectedWeek.id).then(volumeNeedsData => {
         const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
         setVolumeNeedsSaved(hasVolumeData);
+      }).catch(err => {
+        logger.error('Error fetching volume needs status:', err);
       });
     }
   }, [selectedWeek?.id]);
 
 
   async function loadData() {
-    setLoading(true);
-    if (!selectedWeek) return;
+    if (!selectedWeek) {
+      setLoading(false);
+      return;
+    }
 
+    setLoading(true);
     try {
       const [itemsData, volumeNeedsData, lastWeekPricesData] = await Promise.all([
         fetchItems(),
@@ -113,7 +120,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
 
       const needsMap = new Map<string, number>();
       volumeNeedsData.forEach(vn => {
-        needsMap.set(vn.item_id, vn.volume_needed);
+        needsMap.set(vn.item_id, vn.volume_needed || 0);
       });
       setVolumeNeeds(needsMap);
       // Only mark as saved if there's actual volume data (not just empty records)
@@ -123,7 +130,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       setLastWeekDeliveredPrices(lastWeekPricesData);
     } catch (err) {
       logger.error('Error loading data:', err);
-      showToast('Failed to load data', 'error');
+      showToast('Failed to load data. Please try refreshing the page.', 'error');
     } finally {
       setLoading(false);
     }

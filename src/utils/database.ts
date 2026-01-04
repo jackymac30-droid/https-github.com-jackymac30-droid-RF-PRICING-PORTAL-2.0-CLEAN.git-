@@ -1403,7 +1403,7 @@ export async function fetchLastWeekDeliveredPrices(currentWeekNumber: number): P
       .not('dlvd_price', 'is', null);
 
     if (pricingError) {
-      console.error('Error fetching last week delivered prices:', pricingError);
+      logger.error('Error fetching last week delivered prices:', pricingError);
       return new Map();
     }
 
@@ -1416,7 +1416,7 @@ export async function fetchLastWeekDeliveredPrices(currentWeekNumber: number): P
 
     return priceMap;
   } catch (error) {
-    console.error('Error in fetchLastWeekDeliveredPrices:', error);
+    logger.error('Error in fetchLastWeekDeliveredPrices:', error);
     return new Map();
   }
 }
