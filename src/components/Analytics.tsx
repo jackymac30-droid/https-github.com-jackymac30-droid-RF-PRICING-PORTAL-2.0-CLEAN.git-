@@ -1024,6 +1024,45 @@ export function Analytics() {
 
       logger.debug(`Calculating analytics for ${validWeeks.length} weeks, ${items.length} items`);
 
+      // Batch fetch all quotes for all weeks at once to avoid N+1 queries
+      const { supabase } = await import('../utils/supabase');
+      const weekIds = validWeeks.map(w => w.id);
+      
+      if (weekIds.length === 0) {
+        setHistoricalData([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: allQuotesData, error: quotesError } = await supabase
+        .from('quotes')
+        .select(`
+          *,
+          supplier:suppliers(*),
+          item:items(*)
+        `)
+        .in('week_id', weekIds);
+
+      if (quotesError) {
+        logger.error('Error fetching quotes for analytics:', quotesError);
+        throw new Error(`Failed to fetch quotes: ${quotesError.message}`);
+      }
+
+      // Group quotes by week_id for faster lookup
+      const quotesByWeek = new Map<string, QuoteWithDetails[]>();
+      (allQuotesData || []).forEach((quote: any) => {
+        if (!quotesByWeek.has(quote.week_id)) {
+          quotesByWeek.set(quote.week_id, []);
+        }
+        // Transform to match QuoteWithDetails type
+        const quoteWithDetails: QuoteWithDetails = {
+          ...quote,
+          supplier: quote.supplier || null,
+          item: quote.item || null,
+        };
+        quotesByWeek.get(quote.week_id)!.push(quoteWithDetails);
+      });
+
       for (const item of items) {
         const prices: HistoricalPrice[] = [];
         const bestPriceByWeek = new Map<number, number>();
@@ -1032,7 +1071,7 @@ export function Analytics() {
 
         // Collect all pricing data across all weeks (only closed/finalized)
         for (const week of validWeeks) {
-          const quotes = await fetchQuotesWithDetails(week.id);
+          const quotes = quotesByWeek.get(week.id) || [];
           const itemQuotes = quotes.filter(q => q.item_id === item.id && q.supplier);
 
           if (itemQuotes.length === 0) continue;
@@ -1051,7 +1090,7 @@ export function Analytics() {
                 weekId: week.id,
                 price,
                 supplierId: quote.supplier_id,
-                supplierName: quote.supplier!.name,
+                supplierName: quote.supplier?.name || 'Unknown',
               });
 
               // Track supplier prices by week for accurate consistency calculation
