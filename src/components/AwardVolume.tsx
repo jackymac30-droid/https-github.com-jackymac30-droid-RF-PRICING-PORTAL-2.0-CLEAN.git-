@@ -8,8 +8,10 @@ import {
   updateEmergencyUnlock,
   submitAllocationsToSuppliers,
   fetchLastWeekDeliveredPrices,
-  fetchItemPricingCalculations
+  fetchItemPricingCalculations,
+  fetchSuppliers
 } from '../utils/database';
+import { sendPricingReminder } from '../utils/emailService';
 import { formatCurrency } from '../utils/helpers';
 import { useToast } from '../contexts/ToastContext';
 import { useApp } from '../contexts/AppContext';
@@ -84,6 +86,16 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWeek, activeTab, volumeNeedsSaved]);
+
+  // Reload volume needs status when week changes
+  useEffect(() => {
+    if (selectedWeek) {
+      fetchVolumeNeeds(selectedWeek.id).then(volumeNeedsData => {
+        const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
+        setVolumeNeedsSaved(hasVolumeData);
+      });
+    }
+  }, [selectedWeek?.id]);
 
 
   async function loadData() {
@@ -310,7 +322,8 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
 
       logger.debug(`Saved ${savedCount}/${items.length} volume needs`);
 
-      // Refetch from DB to confirm save
+      // Refetch from DB to confirm save - add small delay to ensure DB is updated
+      await new Promise(resolve => setTimeout(resolve, 100));
       const volumeNeedsData = await fetchVolumeNeeds(selectedWeek.id);
       // Only mark as saved if there's actual volume data (not just empty records)
       const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
@@ -318,8 +331,23 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
 
       if (hasVolumeData) {
         showToast('Volume needs saved successfully! You can now allocate volume to suppliers.', 'success');
-        // Auto-switch to allocate tab if user wants to proceed
-        // But don't force it - let them stay on volume_needed if they want to review
+        
+        // Notify suppliers that volume requirements are ready
+        try {
+          const suppliers = await fetchSuppliers();
+          const week = selectedWeek;
+          for (const supplier of suppliers) {
+            try {
+              await sendPricingReminder(supplier, week, week.id);
+            } catch (err) {
+              logger.error(`Error notifying supplier ${supplier.name}:`, err);
+            }
+          }
+          logger.debug(`Notified ${suppliers.length} suppliers about volume requirements`);
+        } catch (err) {
+          logger.error('Error notifying suppliers:', err);
+          // Don't fail the save if notification fails
+        }
       } else {
         showToast('Please enter at least one volume need before saving', 'error');
       }
@@ -1053,20 +1081,20 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                     </div>
 
                     {/* Enhanced Supplier Allocation Table */}
-                    <div className="overflow-x-auto bg-white/0">
+                    <div className="overflow-x-auto bg-white/5 backdrop-blur-sm rounded-xl border border-white/10">
                       <table className="w-full">
-                        <thead className="bg-gradient-to-r from-white/8 to-white/5 border-b-2 border-white/15">
+                        <thead className="bg-gradient-to-r from-emerald-500/20 to-lime-500/20 border-b-2 border-emerald-400/30">
                           <tr>
-                            <th className="px-6 py-5 text-left text-xs font-black text-white uppercase tracking-wider">Rank</th>
-                            <th className="px-6 py-5 text-left text-xs font-black text-white uppercase tracking-wider">Supplier</th>
-                            <th className="px-6 py-5 text-right text-xs font-black text-white uppercase tracking-wider">Final FOB Price</th>
-                            <th className="px-6 py-5 text-right text-xs font-black text-white uppercase tracking-wider">Award Cases</th>
-                            <th className="px-6 py-5 text-center text-xs font-black text-white uppercase tracking-wider">Response</th>
-                            <th className="px-6 py-5 text-right text-xs font-black text-white uppercase tracking-wider">Confirmed Cases</th>
-                            <th className="px-6 py-5 text-right text-xs font-black text-white uppercase tracking-wider">% of Total</th>
+                            <th className="px-4 py-4 text-left text-xs font-black text-white uppercase tracking-wider">#</th>
+                            <th className="px-4 py-4 text-left text-xs font-black text-white uppercase tracking-wider">Supplier</th>
+                            <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">FOB Price</th>
+                            <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">Award Cases</th>
+                            <th className="px-4 py-4 text-center text-xs font-black text-white uppercase tracking-wider">Status</th>
+                            <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">Confirmed</th>
+                            <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">%</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/5">
+                        <tbody className="divide-y divide-white/10">
                           {sku.entries.map((entry) => {
                             const percentage = sku.volumeNeeded > 0
                               ? ((entry.awarded_volume / sku.volumeNeeded) * 100).toFixed(1)
@@ -1075,37 +1103,40 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                             return (
                               <tr
                                 key={entry.quote_id}
-                                className={`hover:bg-white/5 transition-colors ${
-                                  entry.rank === 1 ? 'bg-emerald-500/5' : ''
+                                className={`hover:bg-white/8 transition-colors ${
+                                  entry.rank === 1 ? 'bg-emerald-500/10 border-l-4 border-emerald-400' :
+                                  entry.rank === 2 ? 'bg-emerald-500/5' :
+                                  entry.rank === 3 ? 'bg-orange-500/5' :
+                                  'bg-white/0'
                                 }`}
                               >
-                                <td className="px-6 py-4">
-                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm ${
-                                    entry.rank === 1 ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30' :
-                                    entry.rank === 2 ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/25' :
-                                    entry.rank === 3 ? 'bg-orange-500/15 text-orange-200 border border-orange-400/25' :
-                                    'bg-white/5 text-white/50 border border-white/10'
+                                <td className="px-4 py-4">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${
+                                    entry.rank === 1 ? 'bg-emerald-500/30 text-emerald-100 border-2 border-emerald-400/50' :
+                                    entry.rank === 2 ? 'bg-emerald-500/20 text-emerald-200 border-2 border-emerald-400/40' :
+                                    entry.rank === 3 ? 'bg-orange-500/20 text-orange-200 border-2 border-orange-400/40' :
+                                    'bg-white/10 text-white/60 border border-white/20'
                                   }`}>
                                     {entry.rank}
                                   </div>
                                 </td>
-                                <td className="px-6 py-4">
+                                <td className="px-4 py-4">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-white">{entry.supplier_name}</span>
+                                    <span className="font-bold text-white text-base">{entry.supplier_name}</span>
                                     {entry.awarded_volume > 0 && (
-                                      <Check className="w-4 h-4 text-green-400" />
+                                      <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 text-right">
-                                  <div className="font-black text-white text-lg">{formatCurrency(entry.price)}</div>
+                                <td className="px-4 py-4 text-right">
+                                  <div className="font-black text-white text-base">{formatCurrency(entry.price)}</div>
                                   {entry.dlvd_price && (
-                                    <div className="text-xs text-white/60 mt-0.5">
-                                      DLVD: {formatCurrency(entry.dlvd_price)}
+                                    <div className="text-xs text-white/50 mt-0.5">
+                                      {formatCurrency(entry.dlvd_price)} DLVD
                                     </div>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 text-right">
+                                <td className="px-4 py-4 text-right">
                                   {canEdit ? (
                                     <input
                                       type="number"
@@ -1113,46 +1144,49 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                                       value={entry.awarded_volume || ''}
                                       onChange={(e) => updateVolume(sku.item.id, entry.supplier_id, entry.quote_id, e.target.value)}
                                       placeholder="0"
-                                      className="w-32 px-4 py-3 border-2 border-white/20 rounded-xl text-right font-black text-lg text-white bg-white/5 focus:outline-none focus:ring-4 focus:ring-emerald-400/50 focus:border-emerald-400/50 placeholder:text-white/40 hover:border-emerald-400/30 transition-all"
+                                      className="w-28 px-3 py-2.5 border-2 border-white/20 rounded-lg text-right font-black text-base text-white bg-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400/50 placeholder:text-white/30 hover:border-emerald-400/30 transition-all"
+                                      style={{ color: '#ffffff' }}
                                     />
                                   ) : (
-                                    <div className="font-black text-white text-lg">{entry.awarded_volume.toLocaleString()}</div>
+                                    <div className="font-black text-white text-base">{entry.awarded_volume > 0 ? entry.awarded_volume.toLocaleString() : '-'}</div>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 text-center">
-                                  {entry.awarded_volume > 0 && (
-                                    <span className={`inline-flex px-3 py-1.5 rounded-full text-xs font-bold ${
-                                      entry.supplier_response_status === 'accepted' ? 'bg-green-500/30 text-green-300 border border-green-400/50' :
-                                      entry.supplier_response_status === 'revised' ? 'bg-orange-500/30 text-orange-300 border border-orange-400/50' :
-                                      entry.supplier_response_status === 'pending' ? 'bg-yellow-500/30 text-yellow-300 border border-yellow-400/50' :
+                                <td className="px-4 py-4 text-center">
+                                  {entry.awarded_volume > 0 ? (
+                                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold ${
+                                      entry.supplier_response_status === 'accepted' ? 'bg-green-500/30 text-green-200 border border-green-400/50' :
+                                      entry.supplier_response_status === 'revised' ? 'bg-orange-500/30 text-orange-200 border border-orange-400/50' :
+                                      entry.supplier_response_status === 'pending' ? 'bg-yellow-500/30 text-yellow-200 border border-yellow-400/50' :
                                       'bg-white/10 text-white/60 border border-white/20'
                                     }`}>
-                                      {entry.supplier_response_status === 'accepted' ? 'Accepted' :
-                                       entry.supplier_response_status === 'revised' ? 'Revised' :
-                                       entry.supplier_response_status === 'pending' ? 'Pending' :
-                                       selectedWeek?.allocation_submitted ? 'Pending' : '-'}
+                                      {entry.supplier_response_status === 'accepted' ? '✓' :
+                                       entry.supplier_response_status === 'revised' ? '↻' :
+                                       entry.supplier_response_status === 'pending' ? '⏳' :
+                                       selectedWeek?.allocation_submitted ? '⏳' : '-'}
                                     </span>
+                                  ) : (
+                                    <span className="text-white/30">-</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 text-right">
+                                <td className="px-4 py-4 text-right">
                                   {entry.supplier_response_volume !== null && entry.supplier_response_volume !== undefined ? (
-                                    <div className={`font-black text-lg ${
+                                    <div className={`font-black text-base ${
                                       entry.supplier_response_volume !== entry.awarded_volume ? 'text-orange-300' : 'text-green-300'
                                     }`}>
                                       {entry.supplier_response_volume.toLocaleString()}
                                       {entry.supplier_response_volume !== entry.awarded_volume && (
-                                        <div className="text-xs text-white/60">({entry.supplier_response_volume > entry.awarded_volume ? '+' : ''}{entry.supplier_response_volume - entry.awarded_volume})</div>
+                                        <div className="text-xs text-white/50">({entry.supplier_response_volume > entry.awarded_volume ? '+' : ''}{entry.supplier_response_volume - entry.awarded_volume})</div>
                                       )}
                                     </div>
                                   ) : (
-                                    <span className="text-white/40">-</span>
+                                    <span className="text-white/30">-</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 text-right">
-                                  <span className={`font-bold text-lg ${
-                                    entry.awarded_volume > 0 ? 'text-emerald-300' : 'text-white/40'
+                                <td className="px-4 py-4 text-right">
+                                  <span className={`font-bold text-base ${
+                                    entry.awarded_volume > 0 ? 'text-emerald-300' : 'text-white/30'
                                   }`}>
-                                    {percentage}%
+                                    {entry.awarded_volume > 0 ? `${percentage}%` : '-'}
                                   </span>
                                 </td>
                               </tr>
