@@ -573,11 +573,11 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
 
   if (selectedWeek.status !== 'finalized' && selectedWeek.status !== 'closed') {
     return (
-      <div className="bg-white rounded-xl shadow-lg p-12 text-center border-2 border-gray-100">
-        <Lock className="w-20 h-20 text-gray-300 mx-auto mb-6" />
-        <h3 className="text-2xl font-bold text-gray-900 mb-3">Volume Allocation Locked</h3>
-        <p className="text-gray-600 mb-2 text-lg">Pricing must be finalized before volume allocation can begin.</p>
-        <p className="text-gray-500 text-sm">Please complete the pricing negotiation process first.</p>
+      <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-lg p-12 text-center border border-white/20">
+        <Info className="w-16 h-16 text-white/40 mx-auto mb-6" />
+        <h3 className="text-2xl font-bold text-white mb-3">Volume Allocation Not Available Yet</h3>
+        <p className="text-white/70 mb-2 text-lg">Volume allocation will be available after pricing is finalized.</p>
+        <p className="text-white/50 text-sm">Complete the pricing workflow first, then return here to allocate volumes.</p>
       </div>
     );
   }
