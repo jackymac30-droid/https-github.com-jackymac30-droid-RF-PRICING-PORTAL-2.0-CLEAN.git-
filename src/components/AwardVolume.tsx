@@ -325,13 +325,34 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       const result = await finalizePricingForWeek(selectedWeek.id, session?.user_name || 'RF Manager');
       if (result.success) {
         showToast('Week pricing finalized! You can now set volume needs and allocate volume.', 'success');
-        // Update week status locally
-        const updatedWeek = { ...selectedWeek, status: 'finalized' as const };
-        if (onWeekUpdate) {
-          onWeekUpdate(updatedWeek);
+        
+        // Fetch the updated week from database to ensure we have the latest state
+        const { supabase } = await import('../utils/supabase');
+        const { data: updatedWeekData, error: weekError } = await supabase
+          .from('weeks')
+          .select('*')
+          .eq('id', selectedWeek.id)
+          .single();
+
+        if (weekError || !updatedWeekData) {
+          logger.error('Error fetching updated week:', weekError);
+          // Fallback to local update
+          const updatedWeek = { ...selectedWeek, status: 'finalized' as const };
+          if (onWeekUpdate) {
+            onWeekUpdate(updatedWeek);
+          }
+        } else {
+          // Use the actual updated week from database
+          if (onWeekUpdate) {
+            onWeekUpdate(updatedWeekData as Week);
+          }
         }
-        // Reload data to refresh UI
+        
+        // Reload data to refresh UI - this will check the updated week status
         await loadData();
+        
+        // Force UI update by clearing canFinalizePricing
+        setCanFinalizePricing(false);
       } else {
         showToast(`Failed to finalize pricing: ${result.error}`, 'error');
       }
