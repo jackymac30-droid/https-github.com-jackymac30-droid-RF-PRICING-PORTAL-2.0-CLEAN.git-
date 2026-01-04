@@ -990,7 +990,8 @@ export function Analytics() {
     if (weeks.length > 0) {
       calculateHistoricalAnalytics();
     }
-  }, [weeks, calculateHistoricalAnalytics]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeks]);
 
   async function loadData() {
     try {
