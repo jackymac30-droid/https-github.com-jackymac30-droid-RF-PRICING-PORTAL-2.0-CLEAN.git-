@@ -1024,43 +1024,14 @@ export function Analytics() {
 
       logger.debug(`Calculating analytics for ${validWeeks.length} weeks, ${items.length} items`);
 
-      // Batch fetch all quotes for all weeks at once to avoid N+1 queries
-      const { supabase } = await import('../utils/supabase');
-      const weekIds = validWeeks.map(w => w.id);
+      // Fetch quotes for all weeks in parallel (better than sequential, uses existing tested code)
+      const quotesPromises = validWeeks.map(week => fetchQuotesWithDetails(week.id));
+      const quotesResults = await Promise.all(quotesPromises);
       
-      if (weekIds.length === 0) {
-        setHistoricalData([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: allQuotesData, error: quotesError } = await supabase
-        .from('quotes')
-        .select(`
-          *,
-          supplier:suppliers(*),
-          item:items(*)
-        `)
-        .in('week_id', weekIds);
-
-      if (quotesError) {
-        logger.error('Error fetching quotes for analytics:', quotesError);
-        throw new Error(`Failed to fetch quotes: ${quotesError.message}`);
-      }
-
       // Group quotes by week_id for faster lookup
       const quotesByWeek = new Map<string, QuoteWithDetails[]>();
-      (allQuotesData || []).forEach((quote: any) => {
-        if (!quotesByWeek.has(quote.week_id)) {
-          quotesByWeek.set(quote.week_id, []);
-        }
-        // Transform to match QuoteWithDetails type
-        const quoteWithDetails: QuoteWithDetails = {
-          ...quote,
-          supplier: quote.supplier || null,
-          item: quote.item || null,
-        };
-        quotesByWeek.get(quote.week_id)!.push(quoteWithDetails);
+      validWeeks.forEach((week, index) => {
+        quotesByWeek.set(week.id, quotesResults[index] || []);
       });
 
       for (const item of items) {
