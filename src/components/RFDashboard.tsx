@@ -875,34 +875,13 @@ export function RFDashboard() {
         ) : mainView === 'award_volume' ? (
           <>
             {selectedWeek && selectedWeek.status === 'open' && canFinalizePricing && (
-              <div className="mb-4 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-400/30">
-                      <CheckCircle className="w-4 h-4 text-emerald-300" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-white/90 font-medium">Ready to finalize pricing</p>
-                      <p className="text-xs text-white/60 mt-0.5">{finalizedSuppliers.length} supplier{finalizedSuppliers.length !== 1 ? 's' : ''} completed</p>
-                    </div>
+              <div className="mb-4 bg-orange-500/10 backdrop-blur-sm rounded-lg border border-orange-400/30 p-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-orange-300" />
+                  <div>
+                    <p className="text-sm text-white/90 font-medium">Pricing must be finalized first</p>
+                    <p className="text-xs text-white/60 mt-0.5">Go to the Pricing tab to finalize week pricing before allocating volume</p>
                   </div>
-                  <button
-                    onClick={handleFinalizePricing}
-                    disabled={finalizingPricing}
-                    className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-                  >
-                    {finalizingPricing ? (
-                      <>
-                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                        Finalizing...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="w-4 h-4" />
-                        Finalize
-                      </>
-                    )}
-                  </button>
                 </div>
               </div>
             )}
@@ -1413,7 +1392,7 @@ export function RFDashboard() {
                     <button
                       onClick={handleFinalizePricing}
                       disabled={finalizingPricing}
-                      className="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 transition font-bold text-lg shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 border-2 border-purple-400/50 flex items-center gap-2"
+                      className="px-8 py-4 bg-gradient-to-r from-emerald-600 to-green-600 text-white rounded-xl hover:from-emerald-700 hover:to-green-700 transition font-bold text-lg shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 border-2 border-emerald-400/50 flex items-center gap-2"
                     >
                       {finalizingPricing ? (
                         <>
