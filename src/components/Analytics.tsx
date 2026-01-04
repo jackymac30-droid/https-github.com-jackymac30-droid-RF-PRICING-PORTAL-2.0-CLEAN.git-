@@ -1053,7 +1053,7 @@ export function Analytics() {
             // Priority: rf_final_fob > supplier_revised_fob > supplier_fob
             // Use nullish coalescing to properly handle 0 values
             const price = quote.rf_final_fob ?? quote.supplier_revised_fob ?? quote.supplier_fob;
-            if (price !== null && price !== undefined && price > 0) {
+            if (price !== null && price !== undefined && price > 0 && quote.supplier) {
               weekPrices.push(price);
               
               prices.push({
@@ -1061,7 +1061,7 @@ export function Analytics() {
                 weekId: week.id,
                 price,
                 supplierId: quote.supplier_id,
-                supplierName: quote.supplier?.name || 'Unknown',
+                supplierName: quote.supplier.name || 'Unknown',
               });
 
               // Track supplier prices by week for accurate consistency calculation
