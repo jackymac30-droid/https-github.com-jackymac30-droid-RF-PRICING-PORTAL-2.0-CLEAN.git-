@@ -225,7 +225,7 @@ export function SupplierDashboard() {
 
       setAllAwardedQuotes(quotesWithWeek);
     } catch (err) {
-      console.error('Error loading awarded volumes:', err);
+      logger.error('Error loading awarded volumes:', err);
       showToast('Failed to load awarded volumes', 'error');
     }
   }
@@ -239,9 +239,7 @@ export function SupplierDashboard() {
       return;
     }
 
-    console.log('=== SUBMIT QUOTES ===');
-    console.log('weekId:', currentWeek.id);
-    console.log('supplierId:', session.supplier_id);
+    // Submitting quotes for week
     console.log('items.length:', items.length);
     console.log('quotes.length:', quotes.length);
     console.log('quoteInputs:', quoteInputs);
