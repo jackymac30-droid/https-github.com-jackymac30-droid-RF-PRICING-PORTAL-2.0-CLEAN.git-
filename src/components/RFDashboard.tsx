@@ -165,14 +165,20 @@ export function RFDashboard() {
 
       const openWeek = openWeeks[0];
 
-      if (!openWeek) {
-        setLoading(false);
-        return;
+      if (openWeek) {
+        setSelectedWeek(openWeek);
+      } else {
+        // If no open week, select the most recent week (closed or open) for viewing
+        const allWeeksSorted = [...weeksData].sort((a, b) => 
+          new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+        );
+        if (allWeeksSorted.length > 0) {
+          setSelectedWeek(allWeeksSorted[0]);
+        }
       }
-
-      setSelectedWeek(openWeek);
     } catch (err) {
-      console.error('Error loading data:', err);
+      logger.error('Error loading data:', err);
+      showToast('Failed to load dashboard data. Please check your connection and try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -530,6 +536,35 @@ export function RFDashboard() {
         <p className="text-emerald-800 font-semibold text-lg">Loading RF Dashboard...</p>
       </div>
     </div>;
+  }
+
+  // Empty state: no data at all
+  if (suppliers.length === 0 || items.length === 0 || weeks.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <Package className="w-16 h-16 text-white/30 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-white mb-2">No Data Available</h3>
+          <p className="text-white/60 mb-4">
+            The database is empty. Please seed the database to get started.
+          </p>
+          <div className="bg-white/5 rounded-lg border border-white/10 p-4 text-left text-sm text-white/70">
+            <p className="font-semibold mb-2">Current Status:</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>{suppliers.length} suppliers</li>
+              <li>{items.length} items</li>
+              <li>{weeks.length} weeks</li>
+            </ul>
+            <p className="mt-4 font-semibold">To get started:</p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>Go to the login page</li>
+              <li>Click "Seed Database" button (visible in dev mode)</li>
+              <li>Or run the SQL seed script in Supabase</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const isReadOnly = selectedWeek?.status !== 'open';
