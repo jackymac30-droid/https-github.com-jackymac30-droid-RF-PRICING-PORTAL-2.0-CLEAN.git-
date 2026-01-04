@@ -301,51 +301,76 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
   async function saveVolumeNeeds() {
     if (!selectedWeek) return;
 
+    // Check if at least one item has volume > 0
+    const hasAnyVolume = Array.from(volumeNeeds.values()).some(vol => vol > 0);
+    if (!hasAnyVolume) {
+      showToast('Please enter volume for at least one SKU before saving', 'error');
+      return;
+    }
+
     logger.debug('Saving volume needs for week:', selectedWeek.week_number);
 
     setSaving(true);
     try {
       let savedCount = 0;
+      let errorCount = 0;
+      
+      // Only save items that have volume > 0 (or explicitly set to 0)
       for (const item of items) {
-        const volumeNeeded = volumeNeeds.get(item.id) || 0;
+        const volumeNeeded = volumeNeeds.get(item.id) ?? 0;
+        // Save all items, even if 0, so we have a complete record
         const success = await updateVolumeNeeded(selectedWeek.id, item.id, volumeNeeded);
-        if (success) savedCount++;
+        if (success) {
+          savedCount++;
+        } else {
+          errorCount++;
+          logger.warn(`Failed to save volume for item ${item.name}:`, item.id);
+        }
       }
 
-      logger.debug(`Saved ${savedCount}/${items.length} volume needs`);
+      logger.debug(`Saved ${savedCount}/${items.length} volume needs (${errorCount} errors)`);
+
+      if (errorCount > 0) {
+        showToast(`Saved ${savedCount} items, but ${errorCount} failed. Please try again.`, 'error');
+        setSaving(false);
+        return;
+      }
 
       // Refetch from DB to confirm save - add small delay to ensure DB is updated
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
       const volumeNeedsData = await fetchVolumeNeeds(selectedWeek.id);
-      // Only mark as saved if there's actual volume data (not just empty records)
+      
+      // Check if there's actual volume data
       const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
       setVolumeNeedsSaved(hasVolumeData);
 
+      // Update local state with saved data
+      const updatedVolumeNeeds = new Map<string, number>();
+      volumeNeedsData.forEach(vn => {
+        updatedVolumeNeeds.set(vn.item_id, vn.volume_needed || 0);
+      });
+      setVolumeNeeds(updatedVolumeNeeds);
+
       if (hasVolumeData) {
-        showToast('Volume needs saved successfully! You can now allocate volume to suppliers.', 'success');
+        showToast(`Volume needs saved successfully! ${savedCount} SKU(s) saved. You can now allocate volume to suppliers.`, 'success');
         
         // Notify suppliers that volume requirements are ready
         try {
-          const suppliers = await fetchSuppliers();
-          const week = selectedWeek;
-          for (const supplier of suppliers) {
-            try {
-              await sendPricingReminder(supplier, week, week.id);
-            } catch (err) {
-              logger.error(`Error notifying supplier ${supplier.name}:`, err);
-            }
+          const { notifySuppliersVolumeReady } = await import('../utils/emailService');
+          const result = await notifySuppliersVolumeReady(selectedWeek.id);
+          if (result.success) {
+            logger.debug(`Notified ${result.count || 0} suppliers about volume requirements`);
           }
-          logger.debug(`Notified ${suppliers.length} suppliers about volume requirements`);
         } catch (err) {
           logger.error('Error notifying suppliers:', err);
           // Don't fail the save if notification fails
         }
       } else {
-        showToast('Please enter at least one volume need before saving', 'error');
+        showToast('Volume needs saved, but no volume data found. Please check your entries.', 'error');
       }
     } catch (err) {
       logger.error('Error saving volume needs:', err);
-      showToast('Failed to save volume needs', 'error');
+      showToast('Failed to save volume needs. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -668,11 +693,11 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
               </button>
             )}
 
-            {activeTab === 'volume_needed' && selectedWeek?.status === 'finalized' && (
+            {activeTab === 'volume_needed' && (selectedWeek?.status === 'finalized' || (selectedWeek?.status === 'closed' && selectedWeek?.emergency_unlock_enabled)) && (
               <button
                 onClick={saveVolumeNeeds}
-                disabled={saving || !canEdit}
-                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={saving || (!canEdit && !selectedWeek?.emergency_unlock_enabled)}
+                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
               >
                 {saving ? (
                   <>
@@ -838,13 +863,15 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                           <input
                             type="number"
                             min="0"
-                            value={volumeNeeded || ''}
+                            step="1"
+                            value={volumeNeeded > 0 ? volumeNeeded : ''}
                             onChange={(e) => updateVolumeNeed(item.id, e.target.value)}
-                            disabled={!canEdit}
-                            placeholder="Enter cases..."
+                            disabled={!canEdit && !selectedWeek?.emergency_unlock_enabled}
+                            placeholder="0"
+                            style={{ color: '#ffffff' }}
                             className={`w-full px-5 py-4 border-2 rounded-xl text-right font-black text-xl focus:outline-none focus:ring-4 transition-all ${
-                              canEdit
-                                ? 'border-emerald-400/20 bg-emerald-500/5 text-white focus:ring-emerald-400/50 focus:border-emerald-400/40 placeholder:text-white/40 hover:border-emerald-400/30'
+                              canEdit || selectedWeek?.emergency_unlock_enabled
+                                ? 'border-emerald-400/20 bg-emerald-500/10 text-white focus:ring-emerald-400/50 focus:border-emerald-400/40 placeholder:text-white/40 hover:border-emerald-400/30'
                                 : 'border-white/10 bg-white/3 text-white/50 cursor-not-allowed'
                             }`}
                           />

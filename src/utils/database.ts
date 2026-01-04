@@ -1079,7 +1079,7 @@ export async function updateVolumeNeeded(
     });
 
   if (error) {
-    console.error('Error updating volume needed:', error);
+    logger.error('Error updating volume needed:', error);
     return false;
   }
 
