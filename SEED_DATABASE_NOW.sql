@@ -36,16 +36,19 @@ WHERE NOT EXISTS (
   WHERE i.name = v.name AND i.pack_size = v.pack_size
 );
 
--- 3. INSERT WEEKS
+-- 3. INSERT WEEKS (check if they exist first to avoid duplicates)
 INSERT INTO weeks (week_number, start_date, end_date, status)
-VALUES
-  (1, '2025-01-01', '2025-01-07', 'closed'),
-  (2, '2025-01-08', '2025-01-14', 'closed'),
-  (3, '2025-01-15', '2025-01-21', 'closed'),
-  (4, '2025-01-22', '2025-01-28', 'closed'),
-  (5, '2025-01-29', '2025-02-04', 'closed'),
-  (6, '2025-02-05', '2025-02-11', 'open')
-ON CONFLICT (week_number) DO NOTHING;
+SELECT * FROM (VALUES
+  (1, '2025-01-01'::date, '2025-01-07'::date, 'closed'::text),
+  (2, '2025-01-08'::date, '2025-01-14'::date, 'closed'::text),
+  (3, '2025-01-15'::date, '2025-01-21'::date, 'closed'::text),
+  (4, '2025-01-22'::date, '2025-01-28'::date, 'closed'::text),
+  (5, '2025-01-29'::date, '2025-02-04'::date, 'closed'::text),
+  (6, '2025-02-05'::date, '2025-02-11'::date, 'open'::text)
+) AS v(week_number, start_date, end_date, status)
+WHERE NOT EXISTS (
+  SELECT 1 FROM weeks w WHERE w.week_number = v.week_number
+);
 
 -- 4. INSERT QUOTES WITH COMPLETE WORKFLOW DATA
 -- This creates realistic pricing data for all suppliers, items, and closed weeks
