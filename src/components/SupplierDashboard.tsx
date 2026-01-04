@@ -744,8 +744,9 @@ export function SupplierDashboard() {
                                   ...prev,
                                   [item.id]: { ...prev[item.id], fob: e.target.value }
                                 }))}
-                                className="w-32 px-4 py-2.5 border-2 border-emerald-400/30 rounded-lg text-lg font-bold focus:outline-none focus:ring-4 focus:ring-emerald-400/50 focus:border-emerald-400/50 bg-white/8 backdrop-blur-sm text-white placeholder:text-white/40 shadow-lg"
+                                className="w-32 px-4 py-2.5 border-2 border-emerald-400/30 rounded-lg text-lg font-bold focus:outline-none focus:ring-4 focus:ring-emerald-400/50 focus:border-emerald-400/50 bg-white/10 backdrop-blur-sm text-white placeholder:text-white/40 shadow-lg"
                                 placeholder="0.00"
+                                style={{ color: '#ffffff' }}
                               />
                             ) : (
                               <span className="inline-flex items-center px-4 py-2 bg-white/8 backdrop-blur-sm rounded-lg text-base font-black text-white border border-white/20 shadow-md">{quote?.supplier_fob ? formatCurrency(quote.supplier_fob) : '-'}</span>
@@ -761,8 +762,9 @@ export function SupplierDashboard() {
                                   ...prev,
                                   [item.id]: { ...prev[item.id], dlvd: e.target.value }
                                 }))}
-                                className="w-32 px-4 py-2.5 border-2 border-white/30 rounded-lg font-bold focus:outline-none focus:ring-4 focus:ring-emerald-400/50 focus:border-emerald-400/50 bg-white/8 backdrop-blur-sm text-white placeholder:text-white/40 shadow-lg"
+                                className="w-32 px-4 py-2.5 border-2 border-white/30 rounded-lg font-bold focus:outline-none focus:ring-4 focus:ring-emerald-400/50 focus:border-emerald-400/50 bg-white/10 backdrop-blur-sm text-white placeholder:text-white/40 shadow-lg"
                                 placeholder="0.00"
+                                style={{ color: '#ffffff' }}
                               />
                             ) : (
                               <span className="inline-flex items-center px-4 py-2 bg-white/8 backdrop-blur-sm rounded-lg text-base font-bold text-white border border-white/20 shadow-md">{quote?.supplier_dlvd ? formatCurrency(quote.supplier_dlvd) : '-'}</span>
