@@ -1024,14 +1024,30 @@ export function Analytics() {
 
       logger.debug(`Calculating analytics for ${validWeeks.length} weeks, ${items.length} items`);
 
-      // Fetch quotes for all weeks in parallel (better than sequential, uses existing tested code)
-      const quotesPromises = validWeeks.map(week => fetchQuotesWithDetails(week.id));
+      // Fetch quotes for all weeks in parallel with error handling
+      const quotesPromises = validWeeks.map(async (week) => {
+        try {
+          const quotes = await fetchQuotesWithDetails(week.id);
+          logger.debug(`Week ${week.week_number}: fetched ${quotes.length} quotes`);
+          return quotes;
+        } catch (err) {
+          logger.error(`Error fetching quotes for week ${week.week_number}:`, err);
+          return [];
+        }
+      });
+      
       const quotesResults = await Promise.all(quotesPromises);
+      const totalQuotes = quotesResults.reduce((sum, quotes) => sum + quotes.length, 0);
+      logger.debug(`Total quotes fetched: ${totalQuotes} across ${validWeeks.length} weeks`);
       
       // Group quotes by week_id for faster lookup
       const quotesByWeek = new Map<string, QuoteWithDetails[]>();
       validWeeks.forEach((week, index) => {
-        quotesByWeek.set(week.id, quotesResults[index] || []);
+        const weekQuotes = quotesResults[index] || [];
+        quotesByWeek.set(week.id, weekQuotes);
+        if (weekQuotes.length > 0) {
+          logger.debug(`Week ${week.week_number}: ${weekQuotes.length} quotes, ${weekQuotes.filter(q => q.supplier).length} with suppliers`);
+        }
       });
 
       for (const item of items) {
