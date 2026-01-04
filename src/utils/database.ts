@@ -1249,8 +1249,6 @@ export async function finalizeWeekAllocations(weekId: string, userName: string):
       .from('weeks')
       .update({
         status: 'closed',
-        finalized_at: new Date().toISOString(),
-        finalized_by: userName,
       })
       .eq('id', weekId);
 
