@@ -87,15 +87,16 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
     // 3. Insert Weeks (check if they exist first)
     console.log('📅 Adding weeks...');
     const weeksToInsert = [
-      { week_number: 1, start_date: '2025-01-01', end_date: '2025-01-07', status: 'closed', allocation_submitted: true, pricing_finalized: true },
-      { week_number: 2, start_date: '2025-01-08', end_date: '2025-01-14', status: 'closed', allocation_submitted: true, pricing_finalized: true },
-      { week_number: 3, start_date: '2025-01-15', end_date: '2025-01-21', status: 'closed', allocation_submitted: true, pricing_finalized: true },
-      { week_number: 4, start_date: '2025-01-22', end_date: '2025-01-28', status: 'closed', allocation_submitted: true, pricing_finalized: true },
-      { week_number: 5, start_date: '2025-01-29', end_date: '2025-02-04', status: 'closed', allocation_submitted: true, pricing_finalized: true },
-      { week_number: 6, start_date: '2025-02-05', end_date: '2025-02-11', status: 'open', allocation_submitted: false, pricing_finalized: false }
+      { week_number: 1, start_date: '2025-01-01', end_date: '2025-01-07', status: 'closed' },
+      { week_number: 2, start_date: '2025-01-08', end_date: '2025-01-14', status: 'closed' },
+      { week_number: 3, start_date: '2025-01-15', end_date: '2025-01-21', status: 'closed' },
+      { week_number: 4, start_date: '2025-01-22', end_date: '2025-01-28', status: 'closed' },
+      { week_number: 5, start_date: '2025-01-29', end_date: '2025-02-04', status: 'closed' },
+      { week_number: 6, start_date: '2025-02-05', end_date: '2025-02-11', status: 'open' }
     ];
     
-    // Insert weeks one by one, ignoring conflicts
+    // Insert weeks one by one, with better error handling
+    let weeksInserted = 0;
     for (const week of weeksToInsert) {
       const { data: existing } = await supabase
         .from('weeks')
@@ -104,24 +105,41 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
         .maybeSingle();
       
       if (!existing) {
-        const { error } = await supabase
+        const { data: newWeek, error } = await supabase
           .from('weeks')
-          .insert(week);
+          .insert(week)
+          .select()
+          .single();
         
-        if (error && !error.message.includes('duplicate')) {
-          console.warn(`Failed to insert week ${week.week_number}:`, error.message);
+        if (error) {
+          console.error(`Failed to insert week ${week.week_number}:`, error.message);
+          throw new Error(`Failed to insert week ${week.week_number}: ${error.message}`);
+        } else if (newWeek) {
+          weeksInserted++;
+          console.log(`✅ Inserted week ${week.week_number}`);
         }
+      } else {
+        console.log(`⏭️ Week ${week.week_number} already exists`);
       }
     }
     
     // Fetch all weeks
-    const { data: allWeeks } = await supabase
+    const { data: allWeeks, error: fetchError } = await supabase
       .from('weeks')
       .select('*')
       .order('week_number');
     
+    if (fetchError) {
+      console.error('Failed to fetch weeks:', fetchError.message);
+      throw new Error(`Failed to fetch weeks: ${fetchError.message}`);
+    }
+    
     const weeks = allWeeks || [];
-    console.log(`✅ Weeks ready: ${weeks.length} total`);
+    console.log(`✅ Weeks ready: ${weeks.length} total (inserted ${weeksInserted} new)`);
+    
+    if (weeks.length === 0) {
+      throw new Error('No weeks found after insertion. Please check database schema.');
+    }
 
     // 4. Get all data for quotes
     const allSuppliers = suppliers;
