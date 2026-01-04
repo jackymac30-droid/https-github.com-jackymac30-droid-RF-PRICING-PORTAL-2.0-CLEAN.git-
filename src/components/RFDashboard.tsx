@@ -200,6 +200,17 @@ export function RFDashboard() {
     }
   }, [selectedWeek]);
 
+  const loadQuotes = useCallback(async () => {
+    if (!selectedWeek || !selectedSupplier) return;
+    try {
+      const quotesData = await fetchQuotesWithDetails(selectedWeek.id, selectedSupplier.id);
+      setQuotes(quotesData);
+    } catch (err) {
+      logger.error('Error loading quotes:', err);
+      showToast('Failed to load quotes. Please try again.', 'error');
+    }
+  }, [selectedWeek, selectedSupplier]);
+
   // Set up realtime subscriptions after functions are defined
   const handleRealtimeQuotes = useCallback(() => {
     if (selectedWeek) {
@@ -223,16 +234,13 @@ export function RFDashboard() {
     }
   }, [selectedWeek, loadWeekData]);
 
-  async function loadQuotes() {
-    if (!selectedWeek || !selectedSupplier) return;
-    try {
-      const quotesData = await fetchQuotesWithDetails(selectedWeek.id, selectedSupplier.id);
-      setQuotes(quotesData);
-    } catch (err) {
-      logger.error('Error loading quotes:', err);
-      showToast('Failed to load quotes. Please try again.', 'error');
+  useEffect(() => {
+    if (selectedWeek && selectedSupplier) {
+      loadQuotes();
+      setCounterInputs({});
+      setFinalInputs({});
     }
-  }
+  }, [selectedWeek, selectedSupplier, loadQuotes]);
 
   // Multi-Supplier-Per-SKU View:
   // When RF clicks "Quotes" button, this loads ALL suppliers' quotes for that SKU
