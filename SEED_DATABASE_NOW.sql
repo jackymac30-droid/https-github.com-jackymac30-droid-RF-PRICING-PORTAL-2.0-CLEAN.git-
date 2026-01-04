@@ -19,9 +19,9 @@ VALUES
   ('Premium Produce', 'supplier5@premiumproduce.com')
 ON CONFLICT (email) DO NOTHING;
 
--- 2. INSERT ITEMS
+-- 2. INSERT ITEMS (check if they exist first to avoid duplicates)
 INSERT INTO items (name, pack_size, category, organic_flag, display_order)
-VALUES
+SELECT * FROM (VALUES
   ('Strawberry', '4×2 lb', 'strawberry', 'CONV', 1),
   ('Strawberry', '8×1 lb', 'strawberry', 'ORG', 2),
   ('Blueberry', '18 oz', 'blueberry', 'CONV', 3),
@@ -30,7 +30,11 @@ VALUES
   ('Blackberry', '12×6 oz', 'blackberry', 'ORG', 6),
   ('Raspberry', '12×6 oz', 'raspberry', 'CONV', 7),
   ('Raspberry', '12×6 oz', 'raspberry', 'ORG', 8)
-ON CONFLICT (name, pack_size) DO NOTHING;
+) AS v(name, pack_size, category, organic_flag, display_order)
+WHERE NOT EXISTS (
+  SELECT 1 FROM items i 
+  WHERE i.name = v.name AND i.pack_size = v.pack_size
+);
 
 -- 3. INSERT WEEKS
 INSERT INTO weeks (week_number, start_date, end_date, status)
