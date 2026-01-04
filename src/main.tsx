@@ -11,7 +11,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   if (!supabaseUrl) missing.push('VITE_SUPABASE_URL');
   if (!supabaseAnonKey) missing.push('VITE_SUPABASE_ANON_KEY');
 
-  console.error('❌ MISSING REQUIRED ENV VARS:', missing.join(', '));
+  // Missing required environment variables
   document.body.innerHTML = `
     <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: system-ui; background: #fee;">
       <div style="max-width: 500px; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
@@ -29,8 +29,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
 }
 
-const maskedUrl = supabaseUrl.replace(/^(https?:\/\/[^.]+).*$/, '$1...');
-console.log('✓ Supabase env loaded:', maskedUrl);
+// Supabase environment variables loaded
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -38,20 +37,13 @@ if (!rootElement) {
 }
 
 try {
-  console.log('🚀 Starting app render...');
-  console.log('📦 Environment check:', {
-    hasSupabaseUrl: !!supabaseUrl,
-    hasSupabaseKey: !!supabaseAnonKey,
-    rootElement: !!rootElement
-  });
   createRoot(rootElement).render(
     <StrictMode>
       <App />
     </StrictMode>
   );
-  console.log('✅ App rendered successfully');
 } catch (error: any) {
-  console.error('❌ Failed to render app:', error);
+  // Failed to render app - show error UI
   rootElement.innerHTML = `
     <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: system-ui; background: #fee; padding: 20px;">
       <div style="max-width: 600px; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">

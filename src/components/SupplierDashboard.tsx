@@ -268,7 +268,7 @@ export function SupplierDashboard() {
         };
       });
 
-      console.log('Upserting payloads:', payloads);
+      // Upserting quote payloads
 
       const { data, error } = await supabase
         .from('quotes')
@@ -279,7 +279,7 @@ export function SupplierDashboard() {
         .select();
 
       if (error) {
-        console.error('Upsert error:', error);
+        logger.error('Upsert error:', error);
         showToast(`Failed to submit prices: ${error.message}`, 'error');
         return;
       }
