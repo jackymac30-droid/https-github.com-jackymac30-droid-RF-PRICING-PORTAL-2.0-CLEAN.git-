@@ -118,20 +118,64 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
     const allItems = items;
     const closedWeeks = weeks.filter(w => w.status === 'closed');
 
-    // 5. Insert Quotes for closed weeks
-    console.log('💰 Adding sample quotes...');
+    // 5. Insert Quotes for closed weeks with complete workflow data
+    console.log('💰 Adding complete workflow quotes...');
     let quoteCount = 0;
     const quotePromises = [];
 
+    // Base prices vary by item category for realism
+    const getBasePrice = (item: typeof allItems[0]) => {
+      const categoryBase: Record<string, number> = {
+        strawberry: 16.50,
+        blueberry: 18.00,
+        blackberry: 20.00,
+        raspberry: 22.00
+      };
+      return categoryBase[item.category] || 17.00;
+    };
+
     for (const week of closedWeeks) {
+      // Add some week-over-week variation
+      const weekMultiplier = 1 + (week.week_number - 1) * 0.02; // Slight price increase over weeks
+      
       for (const supplier of allSuppliers) {
+        // Each supplier has a "personality" - some are more competitive
+        const supplierIndex = allSuppliers.indexOf(supplier);
+        const competitiveness = 0.95 + (supplierIndex % 3) * 0.05; // 0.95, 1.00, or 1.05
+        
         for (const item of allItems) {
-          const supplierFob = Math.round((15 + Math.random() * 3) * 100) / 100;
-          const supplierDlvd = Math.round((18 + Math.random() * 3) * 100) / 100;
-          const rfCounterFob = Math.round((14.5 + Math.random() * 2.5) * 100) / 100;
-          const response = Math.random() > 0.5 ? 'accept' : 'revise';
-          const revisedFob = response === 'revise' ? Math.round((14.75 + Math.random() * 2) * 100) / 100 : null;
-          const rfFinalFob = Math.round((14.5 + Math.random() * 2) * 100) / 100;
+          const basePrice = getBasePrice(item) * weekMultiplier;
+          
+          // Step 1: Supplier submits initial quote (supplier_fob)
+          const supplierFob = Math.round((basePrice * competitiveness + (Math.random() - 0.5) * 2) * 100) / 100;
+          const supplierDlvd = Math.round((supplierFob * 1.15 + (Math.random() - 0.5) * 1) * 100) / 100;
+          
+          // Step 2: RF sends counter offer (rf_counter_fob) - typically 5-10% lower
+          const counterDiscount = 0.07 + Math.random() * 0.03; // 7-10% discount
+          const rfCounterFob = Math.round((supplierFob * (1 - counterDiscount)) * 100) / 100;
+          
+          // Step 3: Supplier responds (70% accept, 30% revise)
+          const response = Math.random() < 0.7 ? 'accept' : 'revise';
+          
+          // Step 4: If revise, supplier provides revised_fob (usually between counter and original)
+          let revisedFob = null;
+          if (response === 'revise') {
+            const reviseRatio = 0.3 + Math.random() * 0.4; // 30-70% of the way from counter to original
+            revisedFob = Math.round((rfCounterFob + (supplierFob - rfCounterFob) * reviseRatio) * 100) / 100;
+          }
+          
+          // Step 5: RF finalizes price (rf_final_fob)
+          // If accepted: use counter or slightly adjusted
+          // If revised: use revised or negotiate further
+          let rfFinalFob: number;
+          if (response === 'accept') {
+            // Sometimes RF adjusts slightly from counter
+            rfFinalFob = Math.round((rfCounterFob + (Math.random() - 0.5) * 0.2) * 100) / 100;
+          } else {
+            // If revised, RF might accept revised or negotiate down slightly
+            const negotiation = revisedFob! * (0.98 + Math.random() * 0.02); // 98-100% of revised
+            rfFinalFob = Math.round(negotiation * 100) / 100;
+          }
 
           quotePromises.push(
             supabase
@@ -158,7 +202,7 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
 
     // Wait for all quotes to be inserted
     await Promise.all(quotePromises);
-    console.log(`✅ Added ${quoteCount} quotes`);
+    console.log(`✅ Added ${quoteCount} complete workflow quotes`);
 
     return {
       success: true,
