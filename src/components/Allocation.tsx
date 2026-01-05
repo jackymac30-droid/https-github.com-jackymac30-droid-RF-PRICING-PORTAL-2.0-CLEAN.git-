@@ -140,38 +140,38 @@ function AIInsightsPanel({ sku, selectedWeek }: { sku: SKUAllocation; selectedWe
   }
 
   return (
-    <div className="px-6 py-4 bg-white/3 border-b border-white/5">
-      <div className="flex items-center gap-2 mb-3">
-        <Brain className="w-4 h-4 text-blue-300/70" />
-        <h4 className="text-sm font-semibold text-white/70 uppercase tracking-wider">AI Insights</h4>
+    <div className="px-5 py-3 bg-white/3 border-b border-white/5">
+      <div className="flex items-center gap-1.5 mb-2.5">
+        <Brain className="w-3.5 h-3.5 text-blue-300/60" />
+        <h4 className="text-[10px] font-semibold text-white/60 uppercase tracking-widest">AI Insights</h4>
       </div>
-      <div className="space-y-2 text-xs">
+      <div className="space-y-1.5 text-[11px]">
         {/* Cheapest supplier */}
-        <div className="flex items-center justify-between">
-          <span className="text-white/50">Cheapest:</span>
-          <span className="text-white/80 font-medium">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-white/40 shrink-0">Cheapest:</span>
+          <span className="text-white/70 font-medium text-right truncate">
             {cheapestEntry ? `${cheapestEntry.supplier_name} @ ${formatCurrency(cheapestEntry.price)}` : 'N/A'}
           </span>
         </div>
         
         {/* Gap/Excess */}
-        <div className="flex items-center justify-between">
-          <span className="text-white/50">Gap/Excess:</span>
-          <span className={`font-medium ${
-            gap === 0 ? 'text-green-300/80' : gap > 0 ? 'text-orange-300/80' : 'text-red-300/80'
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-white/40 shrink-0">Gap:</span>
+          <span className={`font-medium text-right truncate ${
+            gap === 0 ? 'text-green-300/70' : gap > 0 ? 'text-orange-300/70' : 'text-red-300/70'
           }`}>
             {gap === 0 ? 'Balanced' : gap > 0 ? `${gap.toLocaleString()} needed` : `${Math.abs(gap).toLocaleString()} over`}
           </span>
         </div>
         
         {/* Next best move */}
-        <div className="flex items-center justify-between">
-          <span className="text-white/50">Next move:</span>
-          <span className="text-white/80 font-medium text-right max-w-[70%]">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-white/40 shrink-0">Next:</span>
+          <span className="text-white/70 font-medium text-right truncate">
             {nextBestMove ? (
-              `Add ${nextBestMove.cases} to ${nextBestMove.supplier} → ${formatCurrency(nextBestMove.avgDrop)} lower`
+              `+${nextBestMove.cases} to ${nextBestMove.supplier} → ${formatCurrency(nextBestMove.avgDrop)}↓`
             ) : gap > 0 ? (
-              'Allocate remaining cases'
+              'Allocate remaining'
             ) : (
               'Complete'
             )}
@@ -180,10 +180,10 @@ function AIInsightsPanel({ sku, selectedWeek }: { sku: SKUAllocation; selectedWe
         
         {/* Fairness note */}
         {fairnessNote && (
-          <div className="flex items-center justify-between">
-            <span className="text-white/50">Fairness:</span>
-            <span className="text-white/80 font-medium">
-              {fairnessNote.supplier} {fairnessNote.direction} by {fairnessNote.deviation.toFixed(1)}%
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-white/40 shrink-0">Fair:</span>
+            <span className="text-white/70 font-medium text-right truncate">
+              {fairnessNote.supplier} {fairnessNote.direction} {fairnessNote.deviation.toFixed(1)}%
             </span>
           </div>
         )}
@@ -921,22 +921,22 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
 
                     {/* Auto Allocate Button */}
                     {!sku.isLocked && !exceptionsMode && (
-                      <div className="px-6 py-3 border-b border-white/5 bg-white/3">
+                      <div className="px-5 py-2.5 border-b border-white/5 bg-white/3">
                         <button
                           onClick={() => handleAIAutoAllocate(sku)}
                           disabled={sku.volumeNeeded <= 0}
-                          className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center gap-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-semibold transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Zap className="w-4 h-4" />
+                          <Zap className="w-3.5 h-3.5" />
                           Auto Allocate
                         </button>
                       </div>
                     )}
 
                     {/* Compact Supplier Rows */}
-                    <div className="px-6 py-4">
-                      <div className="text-[10px] text-white/50 font-bold uppercase tracking-widest mb-3">Supplier Allocations</div>
-                      <div className="space-y-1.5">
+                    <div className="px-5 py-4">
+                      <div className="text-[9px] text-white/40 font-bold uppercase tracking-widest mb-3">Supplier Allocations</div>
+                      <div className="space-y-2">
                         {sku.entries.map((entry, index) => {
                           const percentage = sku.volumeNeeded > 0
                             ? ((entry.awarded_volume / sku.volumeNeeded) * 100).toFixed(1)
