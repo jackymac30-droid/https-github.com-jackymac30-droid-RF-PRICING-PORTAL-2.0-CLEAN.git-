@@ -64,47 +64,8 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
   const { session } = useApp();
   const draftSaveTimerRef = useRef<NodeJS.Timeout>();
 
-  useEffect(() => {
-    if (selectedWeek) {
-      loadData();
-    } else {
-      setLoading(false);
-    }
-  }, [selectedWeek?.id, selectedWeek?.status]); // React to status changes immediately
-
-  useEffect(() => {
-    if (selectedWeek && activeTab === 'allocate') {
-      // Allow viewing if: allocation submitted OR (finalized/closed status)
-      // Volume needs saved is checked inside the tab content, not here
-      const canAccess = selectedWeek?.allocation_submitted || 
-        (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed');
-      if (!canAccess) {
-        // Auto-switch back to volume_needed if conditions aren't met
-        // Use setTimeout to avoid infinite loop
-        setTimeout(() => {
-          setActiveTab('volume_needed');
-          // Quiet UI: No toasts during planning - just switch tabs
-        }, 0);
-        return;
-      }
-      loadVolumeData();
-    }
-  }, [selectedWeek?.id, selectedWeek?.status, activeTab, loadVolumeData]); // React to status changes
-
-  // Reload volume needs status when week changes or status changes
-  useEffect(() => {
-    if (selectedWeek) {
-      fetchVolumeNeeds(selectedWeek.id).then(volumeNeedsData => {
-        const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
-        setVolumeNeedsSaved(hasVolumeData);
-      }).catch(err => {
-        logger.error('Error fetching volume needs status:', err);
-      });
-    }
-  }, [selectedWeek?.id, selectedWeek?.status]);
-
-
-  async function loadData() {
+  // Wrap loadData in useCallback to prevent infinite loops
+  const loadData = useCallback(async () => {
     if (!selectedWeek) {
       setLoading(false);
       return;
@@ -159,7 +120,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedWeek?.id, selectedWeek?.status, showToast]);
 
   // Memoize loadVolumeData to prevent unnecessary re-renders and ensure it's stable
   const loadVolumeData = useCallback(async () => {
@@ -218,7 +179,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
           });
 
           const totalVolume = entries.reduce((sum, e) => sum + e.awarded_volume, 0);
-          const volumeNeeded = volumeNeeds.get(item.id) || 0;
+          const volumeNeeded = freshVolumeNeeds.get(item.id) || 0;
 
           volumes.push({
             item,
@@ -234,7 +195,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       logger.error('Error loading volume data:', err);
       showToast('Failed to load volume data', 'error');
     }
-  }, [selectedWeek?.id, items, volumeNeeds, showToast]);
+  }, [selectedWeek?.id, items.length, showToast]); // Use items.length to avoid re-creating on array reference changes
 
   function updateVolumeNeed(itemId: string, value: string) {
     const volume = value === '' ? 0 : parseInt(value) || 0;
