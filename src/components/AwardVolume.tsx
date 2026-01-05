@@ -60,7 +60,26 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
   // Track which SKUs are finalized (for future per-SKU finalization feature)
   // const [finalizedSKUs, setFinalizedSKUs] = useState<Set<string>>(new Set());
   const { showToast } = useToast();
-  const { session } = useApp();
+  
+  // Get session - must be called unconditionally at top level (React hooks rule)
+  // If this throws, it means the component is being rendered outside AppProvider
+  let session: { user_name?: string } | null = null;
+  try {
+    const appContext = useApp();
+    session = appContext.session;
+  } catch (error) {
+    // This should never happen if component is properly wrapped in AppProvider
+    logger.error('AwardVolume: useApp failed - component may be rendered outside AppProvider', error);
+    // Return early to prevent further errors
+    return (
+      <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+        <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <p className="text-red-600 text-lg font-medium">Configuration Error</p>
+        <p className="text-gray-500 text-sm mt-2">Please refresh the page. If the error persists, contact support.</p>
+      </div>
+    );
+  }
+  
   const draftSaveTimerRef = useRef<NodeJS.Timeout>();
 
   // Wrap loadData in useCallback to prevent infinite loops
