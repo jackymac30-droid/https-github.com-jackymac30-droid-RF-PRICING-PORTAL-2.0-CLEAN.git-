@@ -72,6 +72,7 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [exceptionsMode, setExceptionsMode] = useState(false);
   const [closingLoop, setClosingLoop] = useState(false);
+  const [expandedSKUs, setExpandedSKUs] = useState<Set<string>>(new Set());
   
   const { showToast } = useToast();
   const { session } = useApp();
@@ -321,6 +322,19 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
       }
     }, 500);
   }, [selectedWeek, showToast]);
+
+  // Toggle SKU expanded state
+  const toggleSKUExpanded = useCallback((itemId: string) => {
+    setExpandedSKUs(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }, []);
 
   // Lock/unlock SKU
   const toggleLockSKU = useCallback((itemId: string) => {
@@ -679,6 +693,17 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                         <span className="capitalize">{sku.item.category}</span>
                       </div>
                     </div>
+
+                    <button
+                      onClick={() => toggleSKUExpanded(sku.item.id)}
+                      className="p-2 bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-all"
+                    >
+                      {isExpanded ? (
+                        <ChevronUp className="w-5 h-5 text-white" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-white" />
+                      )}
+                    </button>
 
                     {/* Volume Progress */}
                     <div className="bg-white/8 backdrop-blur-sm rounded-xl border border-white/15 px-6 py-4 min-w-[240px]">
