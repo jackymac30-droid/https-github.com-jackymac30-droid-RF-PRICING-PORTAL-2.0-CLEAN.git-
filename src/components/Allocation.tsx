@@ -201,6 +201,20 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
     }
   }, [selectedWeek?.id, selectedWeek?.status, selectedWeek?.allocation_submitted, loadData]);
   
+  // Realtime subscription: Refresh when quotes are updated (rf_final_fob set)
+  const handleQuotesUpdate = useCallback(() => {
+    if (selectedWeek?.id) {
+      logger.debug('Quotes updated, refreshing allocation data...');
+      loadData();
+    }
+  }, [selectedWeek?.id, loadData]);
+
+  // Subscribe to quotes table changes for this week
+  useRealtime('quotes', handleQuotesUpdate, { 
+    column: 'week_id', 
+    value: selectedWeek?.id 
+  });
+  
   // Re-check week status periodically if still open (to catch status changes)
   useEffect(() => {
     if (!selectedWeek || selectedWeek.status === 'finalized' || selectedWeek.status === 'closed') {
