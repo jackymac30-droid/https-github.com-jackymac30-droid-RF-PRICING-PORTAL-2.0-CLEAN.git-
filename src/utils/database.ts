@@ -1205,7 +1205,7 @@ export async function finalizePricingForWeek(weekId: string, userName: string): 
       .eq('week_id', weekId);
 
     if (quotesError) {
-      console.error('Error checking quotes:', quotesError);
+      logger.error('Error checking quotes:', quotesError);
       return { success: false, error: 'Failed to validate pricing data' };
     }
 
@@ -1224,13 +1224,13 @@ export async function finalizePricingForWeek(weekId: string, userName: string): 
       .eq('id', weekId);
 
     if (error) {
-      console.error('Error finalizing pricing:', error);
+      logger.error('Error finalizing pricing:', error);
       return { success: false, error: `Failed to finalize week: ${error.message}` };
     }
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error in finalizePricingForWeek:', error);
+    logger.error('Error in finalizePricingForWeek:', error);
     return { success: false, error: error.message || 'Unknown error occurred' };
   }
 }
