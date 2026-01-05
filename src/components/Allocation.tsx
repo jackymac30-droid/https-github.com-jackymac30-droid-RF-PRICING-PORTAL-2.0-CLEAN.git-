@@ -63,6 +63,143 @@ interface AllocationProps {
   onWeekUpdate?: (week: Week) => void;
 }
 
+// AI Insights Panel Component
+function AIInsightsPanel({ sku, selectedWeek }: { sku: SKUAllocation; selectedWeek: Week | null }) {
+  const [historicalShares, setHistoricalShares] = useState<Array<{ supplierId: string; sharePercent: number; averageVolume: number }>>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Calculate insights from real data
+  const cheapestEntry = sku.entries.length > 0 ? sku.entries.reduce((min, e) => e.price < min.price ? e : min, sku.entries[0]) : null;
+  const gap = sku.volumeNeeded - sku.totalAllocated;
+  
+  // Calculate next best move: if we add cases to cheapest supplier, what's the avg drop?
+  let nextBestMove = null;
+  if (gap > 0 && cheapestEntry && sku.totalAllocated > 0) {
+    const currentTotalCost = sku.entries.reduce((sum, e) => sum + (e.price * e.awarded_volume), 0);
+    const currentAvg = sku.weightedAvgPrice;
+    
+    // Try adding 50 cases to cheapest (or gap if less)
+    const testVolume = Math.min(50, gap);
+    const newTotalCost = currentTotalCost + (cheapestEntry.price * testVolume);
+    const newTotalVolume = sku.totalAllocated + testVolume;
+    const newAvg = newTotalVolume > 0 ? newTotalCost / newTotalVolume : 0;
+    const avgDrop = currentAvg - newAvg;
+    
+    if (avgDrop > 0.01) {
+      nextBestMove = {
+        supplier: cheapestEntry.supplier_name,
+        cases: testVolume,
+        avgDrop: avgDrop,
+      };
+    }
+  }
+
+  // Fetch historical shares
+  useEffect(() => {
+    if (!selectedWeek || sku.entries.length === 0) return;
+    
+    setLoadingHistory(true);
+    fetchHistoricalSupplierShares(sku.item.id, selectedWeek.week_number, 10)
+      .then(shares => {
+        setHistoricalShares(shares);
+        setLoadingHistory(false);
+      })
+      .catch(() => {
+        setLoadingHistory(false);
+      });
+  }, [sku.item.id, selectedWeek?.week_number, selectedWeek?.id]);
+
+  // Calculate fairness note
+  let fairnessNote = null;
+  if (historicalShares.length > 0 && sku.volumeNeeded > 0) {
+    const currentShares = new Map<string, number>();
+    sku.entries.forEach(e => {
+      if (e.awarded_volume > 0) {
+        const percent = (e.awarded_volume / sku.volumeNeeded) * 100;
+        currentShares.set(e.supplier_id, percent);
+      }
+    });
+
+    // Find largest deviation
+    let maxDev = 0;
+    let devSupplier = '';
+    historicalShares.forEach(hist => {
+      const current = currentShares.get(hist.supplierId) || 0;
+      const dev = Math.abs(current - hist.sharePercent);
+      if (dev > maxDev) {
+        maxDev = dev;
+        devSupplier = sku.entries.find(e => e.supplier_id === hist.supplierId)?.supplier_name || '';
+        const direction = current < hist.sharePercent ? 'below' : 'above';
+        fairnessNote = {
+          supplier: devSupplier,
+          direction,
+          deviation: maxDev,
+        };
+      }
+    });
+  }
+
+  return (
+    <div className="p-6 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-blue-500/10 border-b border-white/10">
+      <div className="flex items-center gap-2 mb-4">
+        <Brain className="w-5 h-5 text-blue-300" />
+        <h4 className="text-lg font-bold text-white">AI Insights</h4>
+      </div>
+      <div className="space-y-3 text-sm">
+        {/* Cheapest supplier */}
+        <div className="flex items-center justify-between">
+          <span className="text-white/70">Cheapest supplier:</span>
+          <span className="text-white font-semibold">
+            {cheapestEntry ? `${cheapestEntry.supplier_name} @ ${formatCurrency(cheapestEntry.price)}` : 'N/A'}
+          </span>
+        </div>
+        
+        {/* Current weighted avg */}
+        <div className="flex items-center justify-between">
+          <span className="text-white/70">Current weighted avg:</span>
+          <span className="text-white font-semibold">
+            {sku.weightedAvgPrice > 0 ? formatCurrency(sku.weightedAvgPrice) : 'N/A'}
+          </span>
+        </div>
+        
+        {/* Gap/Excess */}
+        <div className="flex items-center justify-between">
+          <span className="text-white/70">Gap/Excess:</span>
+          <span className={`font-semibold ${
+            gap === 0 ? 'text-green-300' : gap > 0 ? 'text-orange-300' : 'text-red-300'
+          }`}>
+            {gap === 0 ? 'Balanced' : gap > 0 ? `${gap.toLocaleString()} cases needed` : `${Math.abs(gap).toLocaleString()} cases over`}
+          </span>
+        </div>
+        
+        {/* Next best move */}
+        <div className="flex items-center justify-between">
+          <span className="text-white/70">Next best move:</span>
+          <span className="text-white font-semibold">
+            {nextBestMove ? (
+              `Add ${nextBestMove.cases} cases to ${nextBestMove.supplier} to lower avg by ${formatCurrency(nextBestMove.avgDrop)}`
+            ) : gap > 0 ? (
+              'Allocate remaining cases to optimize'
+            ) : (
+              'Allocation complete'
+            )}
+          </span>
+        </div>
+        
+        {/* Fairness note */}
+        {fairnessNote && (
+          <div className="flex items-center justify-between">
+            <span className="text-white/70">Fairness note:</span>
+            <span className="text-white font-semibold">
+              {fairnessNote.supplier} {fairnessNote.direction} historical share by {fairnessNote.deviation.toFixed(1)}%
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [skuAllocations, setSkuAllocations] = useState<SKUAllocation[]>([]);
