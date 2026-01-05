@@ -93,38 +93,45 @@ export async function fetchCompleteHistoricalData(): Promise<CompleteHistoricalD
       const weekPrices: number[] = [];
       const weekNumbers: number[] = [];
 
-      // Process each week
+      // Process each week - collect data from ALL suppliers
       for (const week of validWeeks) {
         const quotes = await fetchQuotesWithDetails(week.id);
-        const itemQuotes = quotes.filter(q => q.item_id === item.id && q.supplier);
+        // Filter for this item and ensure supplier data exists
+        const itemQuotes = quotes.filter(q => q.item_id === item.id && q.supplier && q.supplier_id);
 
-        if (itemQuotes.length === 0) continue;
+        if (itemQuotes.length === 0) {
+          logger.debug(`No quotes found for item ${item.name} in week ${week.week_number}`);
+          continue;
+        }
 
         const weekFinalPrices: number[] = [];
         const weekSupplierPrices: number[] = [];
         const weekCounterPrices: number[] = [];
         const weekRevisedPrices: number[] = [];
 
+        // Process ALL quotes from ALL suppliers for this item in this week
         for (const quote of itemQuotes) {
-          // Collect all price types for complete historical record
-          if (quote.supplier_fob && quote.supplier_fob > 0) {
+          // Collect all price types for complete historical record per supplier
+          if (quote.supplier_fob !== null && quote.supplier_fob !== undefined && quote.supplier_fob > 0) {
             weekSupplierPrices.push(quote.supplier_fob);
           }
-          if (quote.rf_counter_fob && quote.rf_counter_fob > 0) {
+          if (quote.rf_counter_fob !== null && quote.rf_counter_fob !== undefined && quote.rf_counter_fob > 0) {
             weekCounterPrices.push(quote.rf_counter_fob);
           }
-          if (quote.supplier_revised_fob && quote.supplier_revised_fob > 0) {
+          if (quote.supplier_revised_fob !== null && quote.supplier_revised_fob !== undefined && quote.supplier_revised_fob > 0) {
             weekRevisedPrices.push(quote.supplier_revised_fob);
           }
 
           // Final price priority: rf_final_fob > supplier_revised_fob > supplier_fob
+          // This is the price used in analytics and AI predictions
           const finalPrice = quote.rf_final_fob ?? quote.supplier_revised_fob ?? quote.supplier_fob;
           
           if (finalPrice !== null && finalPrice !== undefined && finalPrice > 0) {
             weekFinalPrices.push(finalPrice);
             weekPrices.push(finalPrice);
+            weekNumbers.push(week.week_number);
 
-            // Track supplier data
+            // Track supplier-specific data for supplier performance analysis
             const supplierId = quote.supplier_id;
             const supplierName = quote.supplier?.name || 'Unknown';
             
@@ -142,10 +149,13 @@ export async function fetchCompleteHistoricalData(): Promise<CompleteHistoricalD
             supplierData.prices.push(finalPrice);
             supplierData.weeks.push(week.week_number);
 
-            // Track if this supplier had the best price this week
+            // Track if this supplier had the best price this week (for win rate calculation)
             const allWeekPrices = itemQuotes
-              .map(q => q.rf_final_fob ?? q.supplier_revised_fob ?? q.supplier_fob)
-              .filter((p): p is number => p !== null && p !== undefined && p > 0);
+              .map(q => {
+                const price = q.rf_final_fob ?? q.supplier_revised_fob ?? q.supplier_fob;
+                return price !== null && price !== undefined && price > 0 ? price : null;
+              })
+              .filter((p): p is number => p !== null);
             
             if (allWeekPrices.length > 0) {
               const bestPrice = Math.min(...allWeekPrices);

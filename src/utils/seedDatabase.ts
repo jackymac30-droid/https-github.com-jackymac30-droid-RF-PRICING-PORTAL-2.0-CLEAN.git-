@@ -7,7 +7,7 @@ import { fetchSuppliers, fetchItems, fetchWeeks } from './database';
  */
 export async function seedDatabase(): Promise<{ success: boolean; message: string }> {
   try {
-    console.log('🌱 Starting database seed...');
+    logger.debug('🌱 Starting database seed...');
     
     // Check if database tables exist
     const { data: tablesCheck, error: tablesError } = await supabase
@@ -20,7 +20,7 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
     }
 
     // 1. Insert Suppliers
-    console.log('📦 Adding suppliers...');
+    logger.debug('📦 Adding suppliers...');
     const { data: suppliers, error: suppliersError } = await supabase
       .from('suppliers')
       .upsert([
@@ -33,10 +33,10 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
       .select();
 
     if (suppliersError) throw new Error(`Failed to add suppliers: ${suppliersError.message}`);
-    console.log(`✅ Added ${suppliers.length} suppliers`);
+    logger.debug(`✅ Added ${suppliers.length} suppliers`);
 
     // 2. Insert Items (check if they exist first to avoid conflicts)
-    console.log('📦 Adding items...');
+    logger.debug('📦 Adding items...');
     const itemsToInsert = [
       { name: 'Strawberry', pack_size: '4×2 lb', category: 'strawberry', organic_flag: 'CONV', display_order: 1 },
       { name: 'Strawberry', pack_size: '8×1 lb', category: 'strawberry', organic_flag: 'ORG', display_order: 2 },
@@ -66,7 +66,7 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
           .single();
         
         if (error && !error.message.includes('duplicate')) {
-          console.warn(`Failed to insert item ${item.name} ${item.pack_size}:`, error.message);
+          logger.warn(`Failed to insert item ${item.name} ${item.pack_size}:`, error.message);
         } else if (newItem) {
           insertedItems.push(newItem);
         }
@@ -82,10 +82,10 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
       .order('display_order');
     
     const items = fetchedItems || [];
-    console.log(`✅ Items ready: ${items.length} total`);
+    logger.debug(`✅ Items ready: ${items.length} total`);
 
     // 3. Insert Weeks (check if they exist first)
-    console.log('📅 Adding weeks...');
+    logger.debug('📅 Adding weeks...');
     const weeksToInsert = [
       { week_number: 1, start_date: '2025-01-01', end_date: '2025-01-07', status: 'closed' },
       { week_number: 2, start_date: '2025-01-08', end_date: '2025-01-14', status: 'closed' },
@@ -112,14 +112,14 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
           .single();
         
         if (error) {
-          console.error(`Failed to insert week ${week.week_number}:`, error.message);
+          logger.error(`Failed to insert week ${week.week_number}:`, error.message);
           throw new Error(`Failed to insert week ${week.week_number}: ${error.message}`);
         } else if (newWeek) {
           weeksInserted++;
-          console.log(`✅ Inserted week ${week.week_number}`);
+          logger.debug(`✅ Inserted week ${week.week_number}`);
         }
       } else {
-        console.log(`⏭️ Week ${week.week_number} already exists`);
+        logger.debug(`⏭️ Week ${week.week_number} already exists`);
       }
     }
     
@@ -130,12 +130,12 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
       .order('week_number');
     
     if (fetchError) {
-      console.error('Failed to fetch weeks:', fetchError.message);
+      logger.error('Failed to fetch weeks:', fetchError.message);
       throw new Error(`Failed to fetch weeks: ${fetchError.message}`);
     }
     
     const weeks = allWeeks || [];
-    console.log(`✅ Weeks ready: ${weeks.length} total (inserted ${weeksInserted} new)`);
+    logger.debug(`✅ Weeks ready: ${weeks.length} total (inserted ${weeksInserted} new)`);
     
     if (weeks.length === 0) {
       throw new Error('No weeks found after insertion. Please check database schema.');
@@ -147,7 +147,7 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
     const closedWeeks = weeks.filter(w => w.status === 'closed');
 
     // 5. Insert Quotes for closed weeks with complete workflow data
-    console.log('💰 Adding complete workflow quotes...');
+    console.log('💰 Adding complete workflow quotes for ALL suppliers across ALL closed weeks...');
     let quoteCount = 0;
     const quotePromises = [];
 
@@ -162,12 +162,16 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
       return categoryBase[item.category] || 17.00;
     };
 
+    // Ensure we process ALL suppliers for ALL items in ALL closed weeks
+    // This creates complete historical data for AI and analytics
     for (const week of closedWeeks) {
-      // Add some week-over-week variation
+      // Add some week-over-week variation (trending slightly up over time)
       const weekMultiplier = 1 + (week.week_number - 1) * 0.02; // Slight price increase over weeks
       
+      // Process EVERY supplier for EVERY item in this week
       for (const supplier of allSuppliers) {
         // Each supplier has a "personality" - some are more competitive
+        // This creates realistic price variation between suppliers
         const supplierIndex = allSuppliers.indexOf(supplier);
         const competitiveness = 0.95 + (supplierIndex % 3) * 0.05; // 0.95, 1.00, or 1.05
         
@@ -175,14 +179,15 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
           const basePrice = getBasePrice(item) * weekMultiplier;
           
           // Step 1: Supplier submits initial quote (supplier_fob)
+          // Add realistic variation: ±$2 from base price
           const supplierFob = Math.round((basePrice * competitiveness + (Math.random() - 0.5) * 2) * 100) / 100;
           const supplierDlvd = Math.round((supplierFob * 1.15 + (Math.random() - 0.5) * 1) * 100) / 100;
           
-          // Step 2: RF sends counter offer (rf_counter_fob) - typically 5-10% lower
+          // Step 2: RF sends counter offer (rf_counter_fob) - typically 7-10% lower
           const counterDiscount = 0.07 + Math.random() * 0.03; // 7-10% discount
           const rfCounterFob = Math.round((supplierFob * (1 - counterDiscount)) * 100) / 100;
           
-          // Step 3: Supplier responds (70% accept, 30% revise)
+          // Step 3: Supplier responds (70% accept, 30% revise) - realistic negotiation pattern
           const response = Math.random() < 0.7 ? 'accept' : 'revise';
           
           // Step 4: If revise, supplier provides revised_fob (usually between counter and original)
@@ -193,18 +198,23 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
           }
           
           // Step 5: RF finalizes price (rf_final_fob)
-          // If accepted: use counter or slightly adjusted
-          // If revised: use revised or negotiate further
+          // This is the price that gets used in analytics and AI
           let rfFinalFob: number;
           if (response === 'accept') {
-            // Sometimes RF adjusts slightly from counter
+            // If accepted, RF might adjust slightly from counter (usually within $0.20)
             rfFinalFob = Math.round((rfCounterFob + (Math.random() - 0.5) * 0.2) * 100) / 100;
           } else {
-            // If revised, RF might accept revised or negotiate down slightly
-            const negotiation = revisedFob! * (0.98 + Math.random() * 0.02); // 98-100% of revised
+            // If revised, RF might accept revised or negotiate down slightly (98-100% of revised)
+            const negotiation = revisedFob! * (0.98 + Math.random() * 0.02);
             rfFinalFob = Math.round(negotiation * 100) / 100;
           }
 
+          // Create quote with complete workflow data
+          // This ensures AI and analytics have access to:
+          // - Initial supplier prices (for trend analysis)
+          // - RF counters (for negotiation patterns)
+          // - Supplier revisions (for response patterns)
+          // - Final prices (for actual historical averages)
           quotePromises.push(
             supabase
               .from('quotes')
@@ -229,12 +239,29 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
     }
 
     // Wait for all quotes to be inserted
-    const quoteResults = await Promise.all(quotePromises);
-    const quoteErrors = quoteResults.filter(r => r.error).length;
-    if (quoteErrors > 0) {
-      console.warn(`⚠️ ${quoteErrors} quotes failed to insert`);
+    // Process in batches to avoid overwhelming the database and ensure all are processed
+    const batchSize = 50;
+    let processed = 0;
+    let totalErrors = 0;
+    
+    for (let i = 0; i < quotePromises.length; i += batchSize) {
+      const batch = quotePromises.slice(i, i + batchSize);
+      const batchResults = await Promise.all(batch);
+      const batchErrors = batchResults.filter(r => r.error).length;
+      totalErrors += batchErrors;
+      if (batchErrors > 0) {
+        logger.warn(`⚠️ ${batchErrors} quotes failed in batch ${Math.floor(i / batchSize) + 1}`);
+      }
+      processed += batch.length;
+      logger.debug(`Processed ${processed}/${quotePromises.length} quotes...`);
     }
-    console.log(`✅ Added ${quoteCount} complete workflow quotes`);
+    
+    logger.debug(`✅ Added ${quoteCount} complete workflow quotes`);
+    logger.debug(`   - ${closedWeeks.length} closed weeks`);
+    logger.debug(`   - ${allSuppliers.length} suppliers`);
+    logger.debug(`   - ${allItems.length} items`);
+    logger.debug(`   - Expected: ${closedWeeks.length * allSuppliers.length * allItems.length} quotes`);
+    logger.debug(`   - Errors: ${totalErrors}`);
 
     // Verify data was actually inserted
     const { data: verifySuppliers } = await supabase.from('suppliers').select('id');

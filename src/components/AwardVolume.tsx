@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Award, Save, Check, Package, Unlock, AlertTriangle, Send, RefreshCw, Lock, Info, CheckCircle } from 'lucide-react';
 import {
   fetchItems,

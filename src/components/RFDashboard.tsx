@@ -972,7 +972,8 @@ export function RFDashboard() {
             <VolumeAcceptance weekId={selectedWeek.id} />
           ) : (
             <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-12 text-center">
-              <p className="text-white/80">Please select a week to view volume acceptances.</p>
+              <p className="text-white/80 text-lg font-semibold mb-2">No Week Selected</p>
+              <p className="text-white/60">Please select a week from the Pricing tab to view volume acceptances.</p>
             </div>
           )
         ) : (
@@ -1276,13 +1277,17 @@ export function RFDashboard() {
                   
                   if (finalizedQuotes.length > 0 && itemVolume > 0) {
                     // Calculate weighted average FOB based on awarded volumes
+                    // Formula matches PricingCalculations.tsx for consistency
                     const totalAwardedVolume = finalizedQuotes.reduce((sum, q) => sum + (q.awarded_volume || 0), 0);
-                    const weightedFOB = finalizedQuotes.reduce((sum, q) => {
-                      const volume = q.awarded_volume || 0;
-                      return sum + ((q.rf_final_fob || 0) * volume);
-                    }, 0) / totalAwardedVolume;
+                    const weightedFOB = totalAwardedVolume > 0 
+                      ? finalizedQuotes.reduce((sum, q) => {
+                          const volume = q.awarded_volume || 0;
+                          return sum + ((q.rf_final_fob || 0) * volume);
+                        }, 0) / totalAwardedVolume
+                      : 0;
                     
-                    // Blended cost = FOB + Rebate + Freight
+                    // Blended cost = FOB + Rebate + Freight (consistent formula across all components)
+                    // Rebate and freight should come from item_pricing_calculations, but default to standard values
                     const rebate = 0.80;
                     const freight = 1.75;
                     const blendedCost = weightedFOB + rebate + freight;
