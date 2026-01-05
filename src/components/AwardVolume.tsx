@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Award, Save, Check, Package, Unlock, AlertTriangle, Send, RefreshCw, Lock, Info, CheckCircle } from 'lucide-react';
 import {
   fetchItems,
@@ -9,10 +9,9 @@ import {
   submitAllocationsToSuppliers,
   fetchLastWeekDeliveredPrices,
   fetchItemPricingCalculations,
-  fetchSuppliers,
   finalizePricingForWeek
 } from '../utils/database';
-import { sendPricingReminder } from '../utils/emailService';
+// import { sendPricingReminder } from '../utils/emailService';
 import { formatCurrency } from '../utils/helpers';
 import { useToast } from '../contexts/ToastContext';
 import { useApp } from '../contexts/AppContext';
@@ -45,7 +44,6 @@ interface AwardVolumeProps {
 }
 
 export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
-  const [activeTab, setActiveTab] = useState<'volume_needed' | 'allocate'>('volume_needed');
   const [items, setItems] = useState<Item[]>([]);
   const [volumeNeeds, setVolumeNeeds] = useState<Map<string, number>>(new Map());
   const [skuVolumes, setSkuVolumes] = useState<SKUVolumes[]>([]);
@@ -55,11 +53,12 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [unlockReason, setUnlockReason] = useState('');
   const [lastWeekDeliveredPrices, setLastWeekDeliveredPrices] = useState<Map<string, number>>(new Map());
-  const [volumeNeedsSaved, setVolumeNeedsSaved] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [pricingCalculations, setPricingCalculations] = useState<Map<string, { dlvd_price: number; margin: number }>>(new Map()); // item_id -> { dlvd_price, margin }
+  const [pricingCalculations, setPricingCalculations] = useState<Map<string, { dlvd_price: number; margin: number; rebate: number; freight: number }>>(new Map()); // item_id -> { dlvd_price, margin, rebate, freight }
   const [finalizingPricing, setFinalizingPricing] = useState(false);
   const [canFinalizePricing, setCanFinalizePricing] = useState(false);
+  // Track which SKUs are finalized (for future per-SKU finalization feature)
+  // const [finalizedSKUs, setFinalizedSKUs] = useState<Set<string>>(new Set());
   const { showToast } = useToast();
   const { session } = useApp();
   const draftSaveTimerRef = useRef<NodeJS.Timeout>();
@@ -90,9 +89,6 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         needsMap.set(vn.item_id, vn.volume_needed || 0);
       });
       setVolumeNeeds(needsMap);
-      // Only mark as saved if there's actual volume data (not just empty records)
-      const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
-      setVolumeNeedsSaved(hasVolumeData);
 
       setLastWeekDeliveredPrices(lastWeekPricesData);
 
@@ -109,7 +105,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       
       if (weekStatus === 'open') {
         const quotes = await fetchQuotesWithDetails(selectedWeek.id);
-        const hasAnyFinalPrices = quotes.some(q => q.rf_final_fob !== null && q.rf_final_fob > 0);
+        const hasAnyFinalPrices = quotes.some(q => q.rf_final_fob !== null && q.rf_final_fob !== undefined && q.rf_final_fob > 0);
         setCanFinalizePricing(hasAnyFinalPrices);
       } else {
         setCanFinalizePricing(false);
@@ -140,13 +136,15 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         freshVolumeNeeds.set(vn.item_id, vn.volume_needed || 0);
       });
 
-      // Create a map of item_id -> { dlvd_price, margin } from internal pricing calculations
-      const pricingMap = new Map<string, { dlvd_price: number; margin: number }>();
+      // Create a map of item_id -> { dlvd_price, margin, rebate, freight } from internal pricing calculations
+      const pricingMap = new Map<string, { dlvd_price: number; margin: number; rebate: number; freight: number }>();
       pricingData.forEach(p => {
         if (p.dlvd_price !== undefined && p.margin !== undefined) {
           pricingMap.set(p.item_id, {
             dlvd_price: p.dlvd_price,
-            margin: p.margin
+            margin: p.margin,
+            rebate: p.rebate ?? 0.80,
+            freight: p.freight ?? 1.75
           });
         }
       });
@@ -336,10 +334,13 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         // Force UI update by clearing canFinalizePricing
         setCanFinalizePricing(false);
         
-        // Refresh volume needs status after finalization
+        // Refresh volume needs after finalization
         const volumeNeedsData = await fetchVolumeNeeds(selectedWeek.id);
-        const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
-        setVolumeNeedsSaved(hasVolumeData);
+        const needsMap = new Map<string, number>();
+        volumeNeedsData.forEach(vn => {
+          needsMap.set(vn.item_id, vn.volume_needed || 0);
+        });
+        setVolumeNeeds(needsMap);
         
         showToast('Week pricing finalized! You can now set volume needs and allocate volume.', 'success');
       } else {
@@ -395,10 +396,6 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       await new Promise(resolve => setTimeout(resolve, 200));
       const volumeNeedsData = await fetchVolumeNeeds(selectedWeek.id);
       
-      // Check if there's actual volume data
-      const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
-      setVolumeNeedsSaved(hasVolumeData);
-
       // Update local state with saved data
       const updatedVolumeNeeds = new Map<string, number>();
       volumeNeedsData.forEach(vn => {
@@ -406,20 +403,22 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       });
       setVolumeNeeds(updatedVolumeNeeds);
 
+      const hasVolumeData = updatedVolumeNeeds.size > 0 && Array.from(updatedVolumeNeeds.values()).some(v => v > 0);
       if (hasVolumeData) {
         showToast(`Volume needs saved successfully! ${savedCount} SKU(s) saved. You can now allocate volume to suppliers.`, 'success');
         
         // Notify suppliers that volume requirements are ready
-        try {
-          const { notifySuppliersVolumeReady } = await import('../utils/emailService');
-          const result = await notifySuppliersVolumeReady(selectedWeek.id);
-          if (result.success) {
-            logger.debug(`Notified ${result.count || 0} suppliers about volume requirements`);
-          }
-        } catch (err) {
-          logger.error('Error notifying suppliers:', err);
-          // Don't fail the save if notification fails
-        }
+        // TODO: Implement notifySuppliersVolumeReady in emailService.ts
+        // try {
+        //   const { notifySuppliersVolumeReady } = await import('../utils/emailService');
+        //   const result = await notifySuppliersVolumeReady(selectedWeek.id);
+        //   if (result.success) {
+        //     logger.debug(`Notified ${result.count || 0} suppliers about volume requirements`);
+        //   }
+        // } catch (err) {
+        //   logger.error('Error notifying suppliers:', err);
+        //   // Don't fail the save if notification fails
+        // }
       } else {
         showToast('Volume needs saved, but no volume data found. Please check your entries.', 'error');
       }
@@ -539,7 +538,8 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         setUnlockReason('');
         // Reload data to refresh week status
         await loadData();
-        if (activeTab === 'allocate') {
+        // Always load volume data if week is finalized/closed
+        if (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') {
           await loadVolumeData();
         }
         // Update parent component with new week status
@@ -642,7 +642,8 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     setRefreshing(true);
     try {
       await loadData();
-      if (activeTab === 'allocate') {
+      // Always load volume data if week is finalized/closed
+      if (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') {
         await loadVolumeData();
       }
       showToast('Data refreshed successfully', 'success');
@@ -752,7 +753,8 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
               </button>
             )}
 
-            {activeTab === 'volume_needed' && (selectedWeek?.status === 'finalized' || (selectedWeek?.status === 'closed' && selectedWeek?.emergency_unlock_enabled)) && (
+            {/* Save Volume Needs button - show when finalized/closed and can edit */}
+            {(selectedWeek?.status === 'finalized' || (selectedWeek?.status === 'closed' && selectedWeek?.emergency_unlock_enabled)) && (
               <button
                 onClick={saveVolumeNeeds}
                 disabled={saving || (!canEdit && !selectedWeek?.emergency_unlock_enabled)}
@@ -772,10 +774,11 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
               </button>
             )}
 
-            {activeTab === 'allocate' && canEdit && !selectedWeek?.allocation_submitted && volumeNeedsSaved && (
+            {/* Send Allocations button - show when all SKUs have volumes allocated */}
+            {canEdit && !selectedWeek?.allocation_submitted && (
               <button
                 onClick={handleSubmitAllocations}
-                disabled={submitting}
+                disabled={submitting || skuVolumes.length === 0 || skuVolumes.every(sku => sku.totalVolume === 0)}
                 className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
               >
                 {submitting ? (
@@ -792,7 +795,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
               </button>
             )}
 
-            {activeTab === 'allocate' && selectedWeek?.allocation_submitted && (
+            {selectedWeek?.allocation_submitted && (
               <div className="flex items-center gap-2 bg-green-500/20 border border-green-400/30 text-green-300 px-3 py-2 rounded-lg text-sm font-medium">
                 <Check className="w-4 h-4" />
                 Sent
@@ -814,57 +817,13 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         </div>
       )}
 
-      {/* Clean Tab Navigation */}
+      {/* SKU-Centric View - After pricing is finalized */}
       <div className="bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 overflow-hidden">
-        <div className="flex border-b border-white/10">
-          <button
-            onClick={() => setActiveTab('volume_needed')}
-            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'volume_needed'
-                ? 'text-white bg-white/10 border-b-2 border-emerald-400'
-                : 'text-white/70 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Package className="w-4 h-4" />
-            <span>Volume Needed</span>
-          </button>
-          <button
-            onClick={() => {
-              // Allow viewing if: allocation submitted OR (finalized/closed status)
-              // Volume needs saved is checked inside the tab content, not here
-              const canAccess = selectedWeek?.allocation_submitted || 
-                (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed');
-              if (!canAccess) {
-                showToast('Please finalize pricing first', 'info');
-                return;
-              }
-              // Show info message if volume needs not saved yet, but still allow access
-              if ((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && !volumeNeedsSaved && !selectedWeek?.allocation_submitted) {
-                showToast('Please save volume needs first before allocating volume', 'info');
-              }
-              setActiveTab('allocate');
-            }}
-            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'allocate'
-                ? 'text-white bg-white/10 border-b-2 border-emerald-400'
-                : !(selectedWeek?.allocation_submitted || (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed'))
-                ? 'text-white/30 cursor-not-allowed'
-                : 'text-white/70 hover:text-white hover:bg-white/5'
-            }`}
-            disabled={!(selectedWeek?.allocation_submitted || (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed'))}
-          >
-            <Award className="w-4 h-4" />
-            <span>Allocate Volume</span>
-            {!(selectedWeek?.allocation_submitted || ((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && volumeNeedsSaved)) && (
-              <Lock className="w-3 h-3" />
-            )}
-          </button>
-        </div>
-
         <div className="p-6">
-          {activeTab === 'volume_needed' ? (
+          {/* Show finalize pricing banner if still open */}
+          {selectedWeek && (selectedWeek.status as string) === 'open' && canFinalizePricing ? (
             <div className="space-y-6">
-              {selectedWeek?.status === 'open' && canFinalizePricing ? (
+              {canFinalizePricing ? (
                 <div className="bg-gradient-to-r from-emerald-500/20 to-lime-500/20 border-2 border-emerald-400/50 rounded-xl p-6 mb-4 backdrop-blur-sm shadow-lg">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
@@ -912,7 +871,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                       <p className="text-sm text-white/80 font-medium">
                         Enter the total number of cases needed for each SKU, then click "Save Volume Needs".
                       </p>
-                      {volumeNeedsSaved && (
+                      {Array.from(volumeNeeds.values()).some(v => v > 0) && (
                         <p className="text-xs text-emerald-300 mt-1 font-semibold flex items-center gap-1">
                           <Check className="w-3 h-3" />
                           Volume needs saved! You can now allocate volume to suppliers.
@@ -976,24 +935,13 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
             ) : (
             <div className="space-y-4">
               {/* Show lock message if conditions aren't met */}
-              {!(selectedWeek?.allocation_submitted || ((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && volumeNeedsSaved)) ? (
-                <>
-                  {selectedWeek?.status !== 'finalized' && selectedWeek?.status !== 'closed' ? (
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
-                      <div className="flex items-center gap-3">
-                        <Lock className="w-5 h-5 text-orange-300" />
-                        <p className="text-sm text-white/80 font-medium">Please finalize pricing before allocating volume to suppliers.</p>
-                      </div>
-                    </div>
-                  ) : !volumeNeedsSaved ? (
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
-                      <div className="flex items-center gap-3">
-                        <Lock className="w-5 h-5 text-orange-300" />
-                        <p className="text-sm text-white/80 font-medium">Please enter and save volume needs in the "Volume Needed" tab first.</p>
-                      </div>
-                    </div>
-                  ) : null}
-                </>
+              {selectedWeek?.status !== 'finalized' && selectedWeek?.status !== 'closed' ? (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    <Lock className="w-5 h-5 text-orange-300" />
+                    <p className="text-sm text-white/80 font-medium">Please finalize pricing before allocating volume to suppliers.</p>
+                  </div>
+                </div>
               ) : (
                 <>
                   <div className="bg-gradient-to-r from-emerald-500/20 to-lime-500/20 border-2 border-emerald-400/50 rounded-2xl p-6 mb-6 backdrop-blur-sm shadow-lg">
@@ -1006,8 +954,8 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                     </p>
                   </div>
 
-                  {/* Show allocation content if pricing is finalized/closed AND volume needs are saved - always show for flexibility */}
-                  {((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && volumeNeedsSaved) ? (
+                  {/* Show allocation content if pricing is finalized/closed */}
+                  {(selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') ? (
                     <>
                       {skuVolumes.length === 0 ? (
                         <div className="text-center py-12 bg-white/5 rounded-xl border border-white/10">
@@ -1312,7 +1260,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                       )}
 
                       {/* Internal Pricing Calculations - Show for all items with finalized pricing */}
-                      {selectedWeek?.status === 'finalized' && volumeNeedsSaved && items.length > 0 && (
+                      {selectedWeek?.status === 'finalized' && items.length > 0 && (
                         <div className="mt-8">
                           <PricingCalculations
                             weekId={selectedWeek.id}
@@ -1321,12 +1269,14 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                               // Reload pricing calculations when updated
                               if (selectedWeek) {
                                 const pricingData = await fetchItemPricingCalculations(selectedWeek.id);
-                                const pricingMap = new Map<string, { dlvd_price: number; margin: number }>();
+                                const pricingMap = new Map<string, { dlvd_price: number; margin: number; rebate: number; freight: number }>();
                                 pricingData.forEach(p => {
                                   if (p.dlvd_price !== undefined && p.margin !== undefined) {
                                     pricingMap.set(p.item_id, {
                                       dlvd_price: p.dlvd_price,
-                                      margin: p.margin
+                                      margin: p.margin,
+                                      rebate: p.rebate ?? 0.80,
+                                      freight: p.freight ?? 1.75
                                     });
                                   }
                                 });
