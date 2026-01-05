@@ -118,6 +118,13 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     }
   }, [selectedWeek?.id, selectedWeek?.status, showToast]);
 
+  // Reload data when week status changes to finalized/closed
+  useEffect(() => {
+    if (selectedWeek && (selectedWeek.status === 'finalized' || selectedWeek.status === 'closed')) {
+      loadData();
+    }
+  }, [selectedWeek?.status, selectedWeek?.id, loadData]);
+
   // Memoize loadVolumeData to prevent unnecessary re-renders and ensure it's stable
   const loadVolumeData = useCallback(async () => {
     if (!selectedWeek || items.length === 0) return;
