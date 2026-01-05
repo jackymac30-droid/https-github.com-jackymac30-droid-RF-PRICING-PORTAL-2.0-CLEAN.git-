@@ -92,7 +92,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWeek, activeTab, volumeNeedsSaved]);
 
-  // Reload volume needs status when week changes
+  // Reload volume needs status when week changes or status changes
   useEffect(() => {
     if (selectedWeek) {
       fetchVolumeNeeds(selectedWeek.id).then(volumeNeedsData => {
@@ -102,7 +102,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         logger.error('Error fetching volume needs status:', err);
       });
     }
-  }, [selectedWeek?.id]);
+  }, [selectedWeek?.id, selectedWeek?.status]);
 
 
   async function loadData() {
