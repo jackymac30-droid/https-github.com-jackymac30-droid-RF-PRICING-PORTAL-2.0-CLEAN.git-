@@ -653,8 +653,12 @@ export function RFDashboard() {
 
     setFinalizingPricing(true);
     try {
+      logger.debug(`Finalizing pricing for week ${selectedWeek.week_number} (${selectedWeek.id})`);
       const result = await finalizePricingForWeek(selectedWeek.id, session?.user_name || 'RF Manager');
+      
       if (result.success) {
+        logger.debug('Pricing finalized successfully, fetching updated week...');
+        
         // Fetch the updated week from database to ensure we have the latest state
         const { supabase } = await import('../utils/supabase');
         const { data: updatedWeekData, error: weekError } = await supabase
@@ -665,6 +669,7 @@ export function RFDashboard() {
 
         if (weekError || !updatedWeekData) {
           logger.error('Error fetching updated week:', weekError);
+          showToast('Pricing finalized but failed to refresh week status. Please refresh the page.', 'warning');
           // Fallback to local update
           const updatedWeek = { 
             ...selectedWeek, 
@@ -673,6 +678,7 @@ export function RFDashboard() {
           setSelectedWeek(updatedWeek);
           setWeeks(prev => prev.map(w => w.id === selectedWeek.id ? updatedWeek : w));
         } else {
+          logger.debug(`Week status updated to: ${updatedWeekData.status}`);
           // Use the actual updated week from database
           const updatedWeek = updatedWeekData as Week;
           setSelectedWeek(updatedWeek);
@@ -682,13 +688,15 @@ export function RFDashboard() {
         // Reload week data to refresh supplier statuses
         await loadWeekData();
         
-        // Small delay to ensure state is updated before switching tabs
+        // Automatically switch to Award Volume tab after finalizing pricing
+        // Use a small delay to ensure state is fully updated
         setTimeout(() => {
-          // Automatically switch to Award Volume tab after finalizing pricing
+          logger.debug('Switching to award_volume tab');
           setMainView('award_volume');
-          showToast('Pricing finalized! You can now allocate volumes.', 'success');
-        }, 100);
+          showToast('Pricing finalized! Volume allocation is now available.', 'success');
+        }, 300);
       } else {
+        logger.error('Failed to finalize pricing:', result.error);
         showToast(result.error || 'Failed to finalize pricing', 'error');
       }
     } catch (err) {

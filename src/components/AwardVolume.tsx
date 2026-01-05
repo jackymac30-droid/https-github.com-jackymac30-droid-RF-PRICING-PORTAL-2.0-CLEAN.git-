@@ -708,31 +708,56 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     );
   }
 
-  // Check if there are any finalized quotes (per-quote finalization check)
+  // Check actual database status, not just prop (prop can be stale)
+  const [actualWeekStatus, setActualWeekStatus] = useState<string | null>(null);
   const [hasFinalizedQuotes, setHasFinalizedQuotes] = useState(false);
   
   useEffect(() => {
-    const checkFinalizedQuotes = async () => {
+    const checkWeekStatus = async () => {
       if (!selectedWeek?.id) {
+        setActualWeekStatus(null);
         setHasFinalizedQuotes(false);
         return;
       }
       
       try {
+        // Check database status directly
+        const { supabase } = await import('../utils/supabase');
+        const { data: weekData, error: weekError } = await supabase
+          .from('weeks')
+          .select('status')
+          .eq('id', selectedWeek.id)
+          .single();
+        
+        if (weekError) {
+          logger.error('Error checking week status:', weekError);
+          setActualWeekStatus(selectedWeek.status);
+        } else {
+          setActualWeekStatus(weekData?.status || selectedWeek.status);
+        }
+        
+        // Also check for finalized quotes
         const quotes = await fetchQuotesWithDetails(selectedWeek.id);
         const hasAnyFinalized = quotes.some(q => q.rf_final_fob !== null && q.rf_final_fob !== undefined && q.rf_final_fob > 0);
         setHasFinalizedQuotes(hasAnyFinalized);
       } catch (err) {
-        logger.error('Error checking finalized quotes:', err);
+        logger.error('Error checking week status and quotes:', err);
+        setActualWeekStatus(selectedWeek.status);
         setHasFinalizedQuotes(false);
       }
     };
     
-    checkFinalizedQuotes();
+    checkWeekStatus();
+    // Re-check every 2 seconds when week is open (in case status changes)
+    if (selectedWeek?.status === 'open') {
+      const interval = setInterval(checkWeekStatus, 2000);
+      return () => clearInterval(interval);
+    }
   }, [selectedWeek?.id, selectedWeek?.status]);
 
-  // Allow Volume tab if week is finalized/closed OR if there's at least one finalized quote (per-quote workflow)
-  const currentStatus = selectedWeek?.status;
+  // Allow Volume tab if week is finalized/closed OR if there's at least one finalized quote
+  // Use actual database status, fallback to prop
+  const currentStatus = actualWeekStatus || selectedWeek?.status;
   const canAccessVolume = currentStatus === 'finalized' || currentStatus === 'closed' || hasFinalizedQuotes;
   
   if (!canAccessVolume) {

@@ -1297,18 +1297,36 @@ export async function finalizePricingForWeek(weekId: string, userName: string): 
     }
 
     // Update week status (only use columns that exist in schema)
-    const { error } = await supabase
+    const { error: updateError } = await supabase
       .from('weeks')
       .update({
         status: 'finalized',
       })
       .eq('id', weekId);
 
-    if (error) {
-      logger.error('Error finalizing pricing:', error);
-      return { success: false, error: `Failed to finalize week: ${error.message}` };
+    if (updateError) {
+      logger.error('Error finalizing pricing - update failed:', updateError);
+      return { success: false, error: `Failed to finalize week: ${updateError.message}` };
     }
 
+    // Verify the update actually worked by fetching the week
+    const { data: verifyWeek, error: verifyError } = await supabase
+      .from('weeks')
+      .select('id, status')
+      .eq('id', weekId)
+      .single();
+
+    if (verifyError) {
+      logger.error('Error verifying week status update:', verifyError);
+      return { success: false, error: `Week updated but verification failed: ${verifyError.message}` };
+    }
+
+    if (verifyWeek?.status !== 'finalized') {
+      logger.error(`Week status update failed - expected 'finalized', got '${verifyWeek?.status}'`);
+      return { success: false, error: `Week status update failed. Status is still '${verifyWeek?.status}'` };
+    }
+
+    logger.debug(`Successfully finalized week ${weekId} - status is now '${verifyWeek.status}'`);
     return { success: true };
   } catch (error: any) {
     logger.error('Error in finalizePricingForWeek:', error);
