@@ -502,6 +502,15 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
     )
   );
 
+  // Calculate overall summary
+  const overallTotalVolume = skuAllocations.reduce((sum, sku) => sum + sku.totalAllocated, 0);
+  const overallTotalNeeded = skuAllocations.reduce((sum, sku) => sum + sku.volumeNeeded, 0);
+  const overallTotalCost = skuAllocations.reduce((sum, sku) => {
+    return sum + sku.entries.reduce((s, e) => s + (e.price * e.awarded_volume), 0);
+  }, 0);
+  const overallWeightedAvg = overallTotalVolume > 0 ? overallTotalCost / overallTotalVolume : 0;
+  const lockedCount = skuAllocations.filter(sku => sku.isLocked).length;
+
   return (
     <div className="space-y-6">
       {/* Header */}
