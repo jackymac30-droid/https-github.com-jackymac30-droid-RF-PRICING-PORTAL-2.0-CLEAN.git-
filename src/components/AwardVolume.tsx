@@ -119,7 +119,11 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         fetchLastWeekDeliveredPrices(selectedWeek.week_number)
       ]);
 
-      setItems(itemsData);
+      // Deduplicate items by ID to prevent duplicates
+      const uniqueItems = Array.from(
+        new Map(itemsData.map(item => [item.id, item])).values()
+      );
+      setItems(uniqueItems);
 
       const needsMap = new Map<string, number>();
       volumeNeedsData.forEach(vn => {
@@ -363,6 +367,11 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         
         // Force UI update by clearing canFinalizePricing
         setCanFinalizePricing(false);
+        
+        // Refresh volume needs status after finalization
+        const volumeNeedsData = await fetchVolumeNeeds(selectedWeek.id);
+        const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
+        setVolumeNeedsSaved(hasVolumeData);
       } else {
         showToast(`Failed to finalize pricing: ${result.error}`, 'error');
       }
