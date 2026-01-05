@@ -856,27 +856,28 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
           </button>
           <button
             onClick={() => {
-              // Allow viewing if: allocation submitted OR (finalized/closed AND volume needs saved)
+              // Allow viewing if: allocation submitted OR (finalized/closed status)
+              // Volume needs saved is checked inside the tab content, not here
               const canAccess = selectedWeek?.allocation_submitted || 
-                ((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && volumeNeedsSaved);
+                (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed');
               if (!canAccess) {
-                if (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') {
-                  showToast('Please save volume needs first before allocating volume', 'info');
-                } else {
-                  showToast('Please finalize pricing first', 'info');
-                }
+                showToast('Please finalize pricing first', 'info');
                 return;
+              }
+              // Show info message if volume needs not saved yet, but still allow access
+              if ((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && !volumeNeedsSaved && !selectedWeek?.allocation_submitted) {
+                showToast('Please save volume needs first before allocating volume', 'info');
               }
               setActiveTab('allocate');
             }}
             className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
               activeTab === 'allocate'
                 ? 'text-white bg-white/10 border-b-2 border-emerald-400'
-                : !(selectedWeek?.allocation_submitted || ((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && volumeNeedsSaved))
+                : !(selectedWeek?.allocation_submitted || (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed'))
                 ? 'text-white/30 cursor-not-allowed'
                 : 'text-white/70 hover:text-white hover:bg-white/5'
             }`}
-            disabled={!(selectedWeek?.allocation_submitted || ((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && volumeNeedsSaved))}
+            disabled={!(selectedWeek?.allocation_submitted || (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed'))}
           >
             <Award className="w-4 h-4" />
             <span>Allocate Volume</span>
