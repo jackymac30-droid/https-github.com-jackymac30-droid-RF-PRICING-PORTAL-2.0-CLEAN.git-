@@ -1641,6 +1641,133 @@ export async function fetchPrevious3WeekVolumeAverages(currentWeekNumber: number
   return averages;
 }
 
+/**
+ * Fetch historical supplier allocation shares for a specific item
+ * Returns allocation percentages per supplier based on last N weeks
+ */
+export async function fetchHistoricalSupplierShares(
+  itemId: string,
+  currentWeekNumber: number,
+  lookbackWeeks: number = 10
+): Promise<Array<{ supplierId: string; sharePercent: number; averageVolume: number }>> {
+  try {
+    // Get previous weeks (closed or finalized)
+    const { data: weeks, error: weeksError } = await supabase
+      .from('weeks')
+      .select('id, week_number')
+      .in('status', ['finalized', 'closed'])
+      .lt('week_number', currentWeekNumber)
+      .order('week_number', { ascending: false })
+      .limit(lookbackWeeks);
+
+    if (weeksError || !weeks || weeks.length === 0) {
+      logger.debug(`No historical weeks found for item ${itemId}`);
+      return [];
+    }
+
+    const weekIds = weeks.map(w => w.id);
+
+    // Get all quotes with awarded_volume for this item across historical weeks
+    const { data: quotes, error: quotesError } = await supabase
+      .from('quotes')
+      .select('supplier_id, awarded_volume')
+      .eq('item_id', itemId)
+      .in('week_id', weekIds)
+      .not('awarded_volume', 'is', null)
+      .gt('awarded_volume', 0);
+
+    if (quotesError || !quotes) {
+      logger.error('Error fetching historical quotes:', quotesError);
+      return [];
+    }
+
+    // Calculate totals per supplier
+    const supplierTotals = new Map<string, number>();
+    const supplierCounts = new Map<string, number>();
+    let totalVolume = 0;
+
+    quotes.forEach(quote => {
+      const volume = quote.awarded_volume || 0;
+      if (volume > 0) {
+        const supplierId = quote.supplier_id;
+        supplierTotals.set(supplierId, (supplierTotals.get(supplierId) || 0) + volume);
+        supplierCounts.set(supplierId, (supplierCounts.get(supplierId) || 0) + 1);
+        totalVolume += volume;
+      }
+    });
+
+    if (totalVolume === 0) {
+      return [];
+    }
+
+    // Calculate shares
+    const shares: Array<{ supplierId: string; sharePercent: number; averageVolume: number }> = [];
+    supplierTotals.forEach((total, supplierId) => {
+      const count = supplierCounts.get(supplierId) || 1;
+      shares.push({
+        supplierId,
+        sharePercent: (total / totalVolume) * 100,
+        averageVolume: total / count,
+      });
+    });
+
+    return shares.sort((a, b) => b.sharePercent - a.sharePercent);
+  } catch (error) {
+    logger.error('Error in fetchHistoricalSupplierShares:', error);
+    return [];
+  }
+}
+
+/**
+ * Lock a specific SKU for a week (makes allocation read-only)
+ */
+export async function lockSKU(weekId: string, itemId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('week_item_volumes')
+      .update({ 
+        locked: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('week_id', weekId)
+      .eq('item_id', itemId);
+
+    if (error) {
+      logger.error('Error locking SKU:', error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    logger.error('Error in lockSKU:', error);
+    return false;
+  }
+}
+
+/**
+ * Unlock a specific SKU for a week
+ */
+export async function unlockSKU(weekId: string, itemId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('week_item_volumes')
+      .update({ 
+        locked: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('week_id', weekId)
+      .eq('item_id', itemId);
+
+    if (error) {
+      logger.error('Error unlocking SKU:', error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    logger.error('Error in unlockSKU:', error);
+    return false;
+  }
+}
+
 export async function closeVolumeLoop(weekId: string, userName: string): Promise<{ success: boolean; message: string; pendingCount?: number }> {
   try {
     const { data, error } = await supabase

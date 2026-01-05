@@ -23,8 +23,10 @@ import { sendPricingReminder } from '../utils/emailService';
 import type { Week, Item, Supplier, QuoteWithDetails } from '../types';
 import { formatCurrency } from '../utils/helpers';
 import { Analytics } from './Analytics';
-import { AwardVolume } from './AwardVolume';
-import { VolumeAcceptance } from './VolumeAcceptance';
+import { Allocation } from './Allocation';
+// Legacy components kept for reference but not used
+// import { AwardVolume } from './AwardVolume';
+// import { VolumeAcceptance } from './VolumeAcceptance';
 import { QuickStats } from './QuickStats';
 import { NotificationCenter } from './NotificationCenter';
 import { ExportData } from './ExportData';
@@ -1076,7 +1078,7 @@ export function RFDashboard() {
                 </div>
               </div>
             )}
-            <AwardVolume 
+            <Allocation 
               selectedWeek={selectedWeek} 
               onWeekUpdate={(updatedWeek) => {
                 setSelectedWeek(updatedWeek);
@@ -1086,8 +1088,15 @@ export function RFDashboard() {
             />
           </>
         ) : mainView === 'volume_acceptance' ? (
+          // Volume Acceptance is now part of Allocation component (Exceptions mode)
           selectedWeek ? (
-            <VolumeAcceptance weekId={selectedWeek.id} />
+            <Allocation 
+              selectedWeek={selectedWeek} 
+              onWeekUpdate={(updatedWeek) => {
+                setSelectedWeek(updatedWeek);
+                setWeeks(prev => prev.map(w => w.id === updatedWeek.id ? updatedWeek : w));
+              }}
+            />
           ) : (
             <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-lg border border-white/20 p-12 text-center">
               <p className="text-white/80 text-lg font-semibold mb-2">No Week Selected</p>
