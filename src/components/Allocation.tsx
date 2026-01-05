@@ -75,6 +75,10 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
   const { session } = useApp();
   const draftSaveTimerRef = useRef<NodeJS.Timeout>();
 
+  // Track actual week status from database (not just prop)
+  const [actualWeekStatus, setActualWeekStatus] = useState<string | null>(null);
+  const [hasFinalizedQuotes, setHasFinalizedQuotes] = useState(false);
+
   // Load data
   const loadData = useCallback(async () => {
     if (!selectedWeek) {
@@ -84,12 +88,31 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
 
     setLoading(true);
     try {
+      // Check database status directly (not just prop)
+      const { supabase } = await import('../utils/supabase');
+      const { data: weekData } = await supabase
+        .from('weeks')
+        .select('status')
+        .eq('id', selectedWeek.id)
+        .single();
+      
+      const dbStatus = weekData?.status || selectedWeek.status;
+      setActualWeekStatus(dbStatus);
+
       const [itemsData, quotes, volumeNeedsData, pricingData] = await Promise.all([
         fetchItems(),
         fetchQuotesWithDetails(selectedWeek.id),
         fetchVolumeNeeds(selectedWeek.id),
         fetchItemPricingCalculations(selectedWeek.id),
       ]);
+
+      // Check if there are any finalized quotes (rf_final_fob set)
+      const hasAnyFinalized = quotes.some(q => 
+        q.rf_final_fob !== null && 
+        q.rf_final_fob !== undefined && 
+        q.rf_final_fob > 0
+      );
+      setHasFinalizedQuotes(hasAnyFinalized);
 
       // Deduplicate items
       const uniqueItems = Array.from(
@@ -175,7 +198,30 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
     if (selectedWeek) {
       loadData();
     }
-  }, [selectedWeek?.id, selectedWeek?.allocation_submitted, loadData]);
+  }, [selectedWeek?.id, selectedWeek?.status, selectedWeek?.allocation_submitted, loadData]);
+  
+  // Re-check week status periodically if still open (to catch status changes)
+  useEffect(() => {
+    if (!selectedWeek || selectedWeek.status === 'finalized' || selectedWeek.status === 'closed') {
+      return;
+    }
+    
+    const interval = setInterval(async () => {
+      const { supabase } = await import('../utils/supabase');
+      const { data: weekData } = await supabase
+        .from('weeks')
+        .select('status')
+        .eq('id', selectedWeek.id)
+        .single();
+      
+      if (weekData?.status && weekData.status !== selectedWeek.status) {
+        // Status changed, reload data
+        loadData();
+      }
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, [selectedWeek?.id, selectedWeek?.status, loadData]);
 
   // Update volume needed for a SKU
   const updateVolumeNeeded = useCallback(async (itemId: string, volume: number) => {
@@ -408,14 +454,20 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
     );
   }
 
-  // Check if week is finalized
-  const weekStatus = selectedWeek.status;
-  if (weekStatus !== 'finalized' && weekStatus !== 'closed') {
+  // Check if week is finalized - use database status OR check for finalized quotes
+  // This allows access if: week status is finalized/closed OR there are finalized quotes
+  const weekStatus = actualWeekStatus || selectedWeek.status;
+  const canAccess = weekStatus === 'finalized' || weekStatus === 'closed' || hasFinalizedQuotes;
+  
+  if (!canAccess) {
     return (
       <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-lg p-12 text-center border border-white/20">
         <Info className="w-16 h-16 text-white/40 mx-auto mb-6" />
         <h3 className="text-2xl font-bold text-white mb-3">Allocation Not Available</h3>
         <p className="text-white/70 mb-2 text-lg">Please finalize pricing first</p>
+        <p className="text-white/50 text-sm mt-2">
+          Go to Pricing tab and set final prices (rf_final_fob) for at least one supplier per SKU
+        </p>
       </div>
     );
   }
