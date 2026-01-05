@@ -22,6 +22,7 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
 
     // 1. Insert Suppliers
     logger.debug('📦 Adding suppliers...');
+    // Note: updated_at will be set automatically by database trigger if column exists
     const { data: suppliers, error: suppliersError } = await supabase
       .from('suppliers')
       .upsert([
