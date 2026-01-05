@@ -74,10 +74,10 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
 
   useEffect(() => {
     if (selectedWeek && activeTab === 'allocate') {
-      // Allow viewing if: allocation submitted OR (finalized/closed AND volume needs saved)
-      // Closed weeks are viewable but read-only unless emergency unlocked
+      // Allow viewing if: allocation submitted OR (finalized/closed status)
+      // Volume needs saved is checked inside the tab content, not here
       const canAccess = selectedWeek?.allocation_submitted || 
-        ((selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') && volumeNeedsSaved);
+        (selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed');
       if (!canAccess) {
         // Auto-switch back to volume_needed if conditions aren't met
         // Use setTimeout to avoid infinite loop
@@ -89,8 +89,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       }
       loadVolumeData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedWeek, activeTab, volumeNeedsSaved]);
+  }, [selectedWeek?.id, selectedWeek?.status, activeTab, loadVolumeData]); // React to status changes
 
   // Reload volume needs status when week changes or status changes
   useEffect(() => {
@@ -162,10 +161,12 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     }
   }
 
-  async function loadVolumeData() {
+  // Memoize loadVolumeData to prevent unnecessary re-renders and ensure it's stable
+  const loadVolumeData = useCallback(async () => {
     if (!selectedWeek || items.length === 0) return;
 
     try {
+      // Parallel fetch for better performance
       const [quotes, pricingData] = await Promise.all([
         fetchQuotesWithDetails(selectedWeek.id),
         fetchItemPricingCalculations(selectedWeek.id)
@@ -233,7 +234,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       logger.error('Error loading volume data:', err);
       showToast('Failed to load volume data', 'error');
     }
-  }
+  }, [selectedWeek?.id, items, volumeNeeds, showToast]);
 
   function updateVolumeNeed(itemId: string, value: string) {
     const volume = value === '' ? 0 : parseInt(value) || 0;
@@ -704,13 +705,17 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     );
   }
 
+  // Show helpful message if pricing isn't finalized yet
   if (selectedWeek.status !== 'finalized' && selectedWeek.status !== 'closed') {
     return (
       <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-lg p-12 text-center border border-white/20">
         <Info className="w-16 h-16 text-white/40 mx-auto mb-6" />
         <h3 className="text-2xl font-bold text-white mb-3">Volume Allocation Not Available Yet</h3>
         <p className="text-white/70 mb-2 text-lg">Volume allocation will be available after pricing is finalized.</p>
-        <p className="text-white/50 text-sm">Complete the pricing workflow first, then return here to allocate volumes.</p>
+        <p className="text-white/50 text-sm mb-4">Complete the pricing workflow in the Pricing tab first, then return here to allocate volumes.</p>
+        <div className="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-4 mt-4 max-w-md mx-auto">
+          <p className="text-sm text-emerald-200 font-semibold">💡 Tip: Go to the Pricing tab and click "Finalize Week Pricing" when ready</p>
+        </div>
       </div>
     );
   }
