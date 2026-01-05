@@ -127,11 +127,18 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     if (!selectedWeek || items.length === 0) return;
 
     try {
-      // Parallel fetch for better performance
-      const [quotes, pricingData] = await Promise.all([
+      // Parallel fetch for better performance - fetch volumeNeeds fresh each time
+      const [quotes, pricingData, volumeNeedsData] = await Promise.all([
         fetchQuotesWithDetails(selectedWeek.id),
-        fetchItemPricingCalculations(selectedWeek.id)
+        fetchItemPricingCalculations(selectedWeek.id),
+        fetchVolumeNeeds(selectedWeek.id)
       ]);
+
+      // Create fresh volumeNeeds map
+      const freshVolumeNeeds = new Map<string, number>();
+      volumeNeedsData.forEach(vn => {
+        freshVolumeNeeds.set(vn.item_id, vn.volume_needed || 0);
+      });
 
       // Create a map of item_id -> { dlvd_price, margin } from internal pricing calculations
       const pricingMap = new Map<string, { dlvd_price: number; margin: number }>();
