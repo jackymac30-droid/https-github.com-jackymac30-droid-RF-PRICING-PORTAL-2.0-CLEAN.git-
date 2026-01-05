@@ -7,23 +7,32 @@
 -- Run this ENTIRE script in Supabase SQL Editor (one time only).
 -- ============================================
 
--- Step 1: Add the updated_at column
+-- Step 1: Create the update_updated_at_column function (if it doesn't exist)
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+-- Step 2: Add the updated_at column to suppliers table
 ALTER TABLE suppliers 
 ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 
--- Step 2: Set updated_at for any existing rows
+-- Step 3: Set updated_at for any existing rows
 UPDATE suppliers 
 SET updated_at = COALESCE(created_at, now()) 
 WHERE updated_at IS NULL;
 
--- Step 3: Check if there's a trigger (optional - just for info)
--- SELECT trigger_name, event_manipulation 
--- FROM information_schema.triggers 
--- WHERE event_object_table = 'suppliers';
-
--- Step 4: If a trigger exists but is broken, recreate it properly
+-- Step 4: Drop existing trigger if it exists (to recreate it properly)
 DROP TRIGGER IF EXISTS update_suppliers_updated_at ON suppliers;
 
+-- Step 5: Create the trigger
 CREATE TRIGGER update_suppliers_updated_at
     BEFORE UPDATE ON suppliers
     FOR EACH ROW
