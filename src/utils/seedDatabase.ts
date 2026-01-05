@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { fetchSuppliers, fetchItems, fetchWeeks } from './database';
+import { logger } from './logger';
 
 /**
  * Seeds the database with suppliers, items, weeks, and sample quotes
@@ -147,7 +148,7 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
     const closedWeeks = weeks.filter(w => w.status === 'closed');
 
     // 5. Insert Quotes for closed weeks with complete workflow data
-    console.log('💰 Adding complete workflow quotes for ALL suppliers across ALL closed weeks...');
+    logger.debug('💰 Adding complete workflow quotes for ALL suppliers across ALL closed weeks...');
     let quoteCount = 0;
     const quotePromises = [];
 
@@ -276,7 +277,7 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
       message: `Successfully seeded database: ${suppliers.length} suppliers, ${items.length} items, ${weeks.length} weeks, ${quoteCount} quotes. ${verifyMessage}`
     };
   } catch (error: any) {
-    console.error('Seed error:', error);
+    logger.error('Seed error:', error);
     return {
       success: false,
       message: `Failed to seed database: ${error.message}`
