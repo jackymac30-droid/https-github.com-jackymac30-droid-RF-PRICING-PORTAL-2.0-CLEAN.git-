@@ -574,23 +574,40 @@ export function RFDashboard() {
     try {
       const result = await finalizePricingForWeek(selectedWeek.id, session?.user_name || 'RF Manager');
       if (result.success) {
-        // Update the selected week state immediately
-        const updatedWeek = { 
-          ...selectedWeek, 
-          status: 'finalized' as const
-        };
-        setSelectedWeek(updatedWeek);
-        
-        // Update the weeks list to reflect the change
-        setWeeks(prev => prev.map(w => w.id === selectedWeek.id ? updatedWeek : w));
+        // Fetch the updated week from database to ensure we have the latest state
+        const { supabase } = await import('../utils/supabase');
+        const { data: updatedWeekData, error: weekError } = await supabase
+          .from('weeks')
+          .select('*')
+          .eq('id', selectedWeek.id)
+          .single();
+
+        if (weekError || !updatedWeekData) {
+          logger.error('Error fetching updated week:', weekError);
+          // Fallback to local update
+          const updatedWeek = { 
+            ...selectedWeek, 
+            status: 'finalized' as const
+          };
+          setSelectedWeek(updatedWeek);
+          setWeeks(prev => prev.map(w => w.id === selectedWeek.id ? updatedWeek : w));
+        } else {
+          // Use the actual updated week from database
+          const updatedWeek = updatedWeekData as Week;
+          setSelectedWeek(updatedWeek);
+          setWeeks(prev => prev.map(w => w.id === selectedWeek.id ? updatedWeek : w));
+        }
         
         // Reload week data to refresh supplier statuses
         await loadWeekData();
         
-        showToast('Pricing finalized successfully. You can now allocate volumes.', 'success');
+        showToast('Pricing finalized successfully! You can now allocate volumes in the Award Volume tab.', 'success');
       } else {
         showToast(result.error || 'Failed to finalize pricing', 'error');
       }
+    } catch (err) {
+      logger.error('Error finalizing pricing:', err);
+      showToast('Failed to finalize pricing. Please try again.', 'error');
     } finally {
       setFinalizingPricing(false);
     }

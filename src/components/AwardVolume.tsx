@@ -70,7 +70,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     } else {
       setLoading(false);
     }
-  }, [selectedWeek]);
+  }, [selectedWeek?.id, selectedWeek?.status]); // React to status changes immediately
 
   useEffect(() => {
     if (selectedWeek && activeTab === 'allocate') {
@@ -338,8 +338,6 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     try {
       const result = await finalizePricingForWeek(selectedWeek.id, session?.user_name || 'RF Manager');
       if (result.success) {
-        showToast('Week pricing finalized! You can now set volume needs and allocate volume.', 'success');
-        
         // Fetch the updated week from database to ensure we have the latest state
         const { supabase } = await import('../utils/supabase');
         const { data: updatedWeekData, error: weekError } = await supabase
@@ -357,8 +355,9 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
           }
         } else {
           // Use the actual updated week from database
+          const updatedWeek = updatedWeekData as Week;
           if (onWeekUpdate) {
-            onWeekUpdate(updatedWeekData as Week);
+            onWeekUpdate(updatedWeek);
           }
         }
         
@@ -372,6 +371,8 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
         const volumeNeedsData = await fetchVolumeNeeds(selectedWeek.id);
         const hasVolumeData = volumeNeedsData.some(vn => vn.volume_needed && vn.volume_needed > 0);
         setVolumeNeedsSaved(hasVolumeData);
+        
+        showToast('Week pricing finalized! You can now set volume needs and allocate volume.', 'success');
       } else {
         showToast(`Failed to finalize pricing: ${result.error}`, 'error');
       }
