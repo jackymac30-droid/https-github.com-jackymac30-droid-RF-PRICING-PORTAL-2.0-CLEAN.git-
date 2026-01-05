@@ -672,31 +672,55 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
 
             return (
               <div key={sku.item.id} className="bg-gradient-to-br from-slate-800/40 via-emerald-900/20 to-slate-800/40 backdrop-blur-xl rounded-2xl border-2 border-emerald-400/30 overflow-hidden shadow-2xl hover:border-emerald-400/50 transition-all">
-                {/* SKU Header */}
-                <div className="bg-gradient-to-r from-emerald-500/15 to-lime-500/15 px-6 py-5 border-b border-white/10">
-                  <div className="flex items-center justify-between flex-wrap gap-4">
+                {/* SKU Header - Clean Big Row */}
+                <div className="bg-gradient-to-r from-emerald-500/15 to-lime-500/15 px-6 py-4 border-b border-white/10">
+                  <div className="flex items-center justify-between gap-6">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-2xl font-black text-white">{sku.item.name}</h3>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="text-xl font-black text-white">{sku.item.name}</h3>
+                        <span className="text-sm text-white/60">{sku.item.pack_size}</span>
                         {sku.isLocked && (
-                          <span className="px-3 py-1 bg-emerald-500/30 text-emerald-200 rounded-full text-xs font-bold border border-emerald-400/50 flex items-center gap-1">
+                          <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 rounded text-xs font-bold border border-emerald-400/50 flex items-center gap-1">
                             <Lock className="w-3 h-3" />
                             Locked
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 flex-wrap text-sm text-white/80">
-                        <span>{sku.item.pack_size}</span>
-                        <span className="px-2 py-1 bg-white/20 rounded-lg font-bold text-white border border-white/30">
-                          {sku.item.organic_flag}
-                        </span>
-                        <span className="capitalize">{sku.item.category}</span>
+                    </div>
+
+                    {/* 4 Key Metrics */}
+                    <div className="grid grid-cols-4 gap-4 flex-1 max-w-3xl">
+                      <div className="text-center">
+                        <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-1">Total Needed</div>
+                        <div className="text-2xl font-black text-white">{sku.volumeNeeded.toLocaleString()}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-1">Allocated</div>
+                        <div className={`text-2xl font-black ${
+                          isComplete ? 'text-green-300' : isOver ? 'text-red-300' : 'text-emerald-300'
+                        }`}>
+                          {sku.totalAllocated.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-1">Remaining</div>
+                        <div className={`text-2xl font-black ${
+                          remaining === 0 ? 'text-green-300' : remaining > 0 ? 'text-orange-300' : 'text-red-300'
+                        }`}>
+                          {remaining === 0 ? '✓' : remaining.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-1">Weighted Avg</div>
+                        <div className="text-2xl font-black text-emerald-300">
+                          {sku.weightedAvgPrice > 0 ? formatCurrency(sku.weightedAvgPrice) : '-'}
+                        </div>
                       </div>
                     </div>
 
                     <button
                       onClick={() => toggleSKUExpanded(sku.item.id)}
-                      className="p-2 bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-all"
+                      className="p-2 bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-all shrink-0"
                     >
                       {isExpanded ? (
                         <ChevronUp className="w-5 h-5 text-white" />
@@ -704,141 +728,15 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                         <ChevronDown className="w-5 h-5 text-white" />
                       )}
                     </button>
-
-                    {/* Volume Progress */}
-                    <div className="bg-white/8 backdrop-blur-sm rounded-xl border border-white/15 px-6 py-4 min-w-[240px]">
-                      <div className="text-xs text-white/80 font-bold mb-2 uppercase tracking-wider">Allocation</div>
-                      <div className="flex items-baseline gap-2 mb-2">
-                        <span className={`text-4xl font-black ${
-                          isComplete ? 'text-green-300' : isOver ? 'text-red-300' : 'text-emerald-300'
-                        }`}>
-                          {sku.totalAllocated.toLocaleString()}
-                        </span>
-                        <span className="text-white/40 text-2xl">/</span>
-                        <span className="text-4xl font-black text-white">
-                          {sku.volumeNeeded.toLocaleString()}
-                        </span>
-                        <span className="text-sm text-white/70 font-semibold ml-1">cases</span>
-                      </div>
-                      <div className="w-full bg-white/5 rounded-full h-2 mb-1 overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all ${
-                            isComplete ? 'bg-gradient-to-r from-green-400 to-green-500' :
-                            isOver ? 'bg-gradient-to-r from-red-400 to-red-500' :
-                            'bg-gradient-to-r from-emerald-400 to-lime-400'
-                          }`}
-                          style={{ width: `${Math.min((sku.totalAllocated / sku.volumeNeeded) * 100, 100)}%` }}
-                        />
-                      </div>
-                      {sku.volumeNeeded > 0 && (
-                        <div className="text-xs text-white/60 mt-1">
-                          {isComplete ? '✓ Complete' : isOver ? `${Math.abs(remaining).toLocaleString()} over` : `${remaining.toLocaleString()} remaining`}
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
 
                 {/* Expandable Details Section */}
                 {isExpanded && (
                   <div className="border-t-2 border-white/10 bg-white/5">
-                    {/* AI Suggestions Panel */}
+                    {/* AI Insights Panel */}
                     {!exceptionsMode && (
-                      <div className="p-6 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-blue-500/10 border-b border-white/10">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Brain className="w-5 h-5 text-blue-300" />
-                          <h4 className="text-lg font-bold text-white">AI Suggestions</h4>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="bg-white/10 rounded-xl p-4 border border-white/20">
-                            <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2">Cheapest Mix</div>
-                            <div className="text-xl font-black text-blue-300">
-                              {cheapestSupplier ? formatCurrency(cheapestPrice) : '-'}
-                            </div>
-                            <div className="text-xs text-white/50 mt-1">
-                              {cheapestSupplier ? `All to ${cheapestSupplier.supplier_name}` : 'No suppliers'}
-                            </div>
-                          </div>
-                          <div className="bg-white/10 rounded-xl p-4 border border-white/20">
-                            <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2">Target Status</div>
-                            {sku.targetPrice > 0 ? (
-                              <>
-                                <div className={`text-xl font-black flex items-center gap-2 ${
-                                  Math.abs(targetDiff) < 0.01 ? 'text-green-300' :
-                                  targetDiff > 0 ? 'text-orange-300' : 'text-blue-300'
-                                }`}>
-                                  {targetDiff > 0 ? (
-                                    <TrendingUp className="w-5 h-5" />
-                                  ) : targetDiff < 0 ? (
-                                    <TrendingDown className="w-5 h-5" />
-                                  ) : (
-                                    <CheckCircle className="w-5 h-5" />
-                                  )}
-                                  {Math.abs(targetDiff) < 0.01 ? 'On Target' : 
-                                   targetDiff > 0 ? `+${formatCurrency(targetDiff)}` : 
-                                   formatCurrency(Math.abs(targetDiff))}
-                                </div>
-                                <div className="text-xs text-white/50 mt-1">
-                                  {targetDiff > 0 ? 'Above target' : targetDiff < 0 ? 'Below target' : 'Perfect'}
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="text-xl font-black text-white/50">Not Set</div>
-                                <div className="text-xs text-white/50 mt-1">Set target price above</div>
-                              </>
-                            )}
-                          </div>
-                          <div className="bg-white/10 rounded-xl p-4 border border-white/20">
-                            <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2">Fairness Score</div>
-                            <div className="text-xl font-black text-purple-300">
-                              {sku.fairnessWeight}%
-                            </div>
-                            <div className="text-xs text-white/50 mt-1">
-                              {sku.fairnessWeight === 0 ? 'Pure cheapest' :
-                               sku.fairnessWeight === 100 ? 'Pure history' :
-                               'Balanced'}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* AI Controls */}
-                        {!sku.isLocked && (
-                          <div className="mt-4 pt-4 border-t border-white/10">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2 block">
-                                  Fairness vs Cheapest: {sku.fairnessWeight}%
-                                </label>
-                                <input
-                                  type="range"
-                                  min="0"
-                                  max="100"
-                                  value={sku.fairnessWeight}
-                                  onChange={(e) => setSkuAllocations(prev => prev.map(s => 
-                                    s.item.id === sku.item.id ? { ...s, fairnessWeight: parseInt(e.target.value) } : s
-                                  ))}
-                                  className="w-full"
-                                />
-                                <div className="flex justify-between text-xs text-white/60 mt-1">
-                                  <span>Cheapest</span>
-                                  <span>Fair</span>
-                                </div>
-                              </div>
-                              <div className="flex items-end">
-                                <button
-                                  onClick={() => handleAIAutoAllocate(sku)}
-                                  disabled={sku.targetPrice <= 0}
-                                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <Zap className="w-5 h-5" />
-                                  Auto Allocate to Target
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      <AIInsightsPanel sku={sku} selectedWeek={selectedWeek} />
                     )}
 
                     {/* Compact Supplier Rows */}
