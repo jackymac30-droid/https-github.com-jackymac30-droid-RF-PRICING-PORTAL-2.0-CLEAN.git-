@@ -13,7 +13,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Award, Save, Check, Package, Lock, Unlock, Send, RefreshCw, 
   Info, CheckCircle, Zap, Target, TrendingUp, AlertTriangle,
-  Sparkles, Brain, Sliders, XCircle, Edit3
+  Sparkles, Brain, Sliders, XCircle, Edit3, ChevronDown, ChevronUp,
+  TrendingDown, DollarSign, BarChart3, History
 } from 'lucide-react';
 import {
   fetchItems,
@@ -582,6 +583,44 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
         </div>
       </div>
 
+      {/* Overall Summary Panel */}
+      {skuAllocations.length > 0 && !exceptionsMode && (
+        <div className="bg-gradient-to-br from-slate-800/40 via-emerald-900/30 to-slate-800/40 backdrop-blur-xl rounded-2xl border-2 border-emerald-400/30 p-6 shadow-2xl">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-2">Total Volume</div>
+              <div className="text-3xl font-black text-white">
+                {overallTotalVolume.toLocaleString()} / {overallTotalNeeded.toLocaleString()}
+              </div>
+              <div className="text-xs text-white/50 mt-1">cases</div>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-2">Blended Avg Cost</div>
+              <div className="text-3xl font-black text-emerald-300">
+                {overallWeightedAvg > 0 ? formatCurrency(overallWeightedAvg) : '-'}
+              </div>
+              <div className="text-xs text-white/50 mt-1">per case</div>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-2">Total Cost</div>
+              <div className="text-3xl font-black text-lime-300">
+                {formatCurrency(overallTotalCost)}
+              </div>
+              <div className="text-xs text-white/50 mt-1">FOB</div>
+            </div>
+            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-2">Locked SKUs</div>
+              <div className="text-3xl font-black text-blue-300">
+                {lockedCount} / {skuAllocations.length}
+              </div>
+              <div className="text-xs text-white/50 mt-1">
+                {allSKUsLocked ? '✓ Ready to Send' : 'Lock all to send'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SKU Allocations */}
       {skuAllocations.length === 0 ? (
         <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-lg p-12 text-center border border-white/20">
@@ -589,11 +628,15 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
           <p className="text-white/80 text-lg font-bold">No SKUs with finalized pricing</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {skuAllocations.map((sku) => {
             const remaining = sku.volumeNeeded - sku.totalAllocated;
             const isComplete = sku.totalAllocated === sku.volumeNeeded && sku.volumeNeeded > 0;
             const isOver = sku.totalAllocated > sku.volumeNeeded;
+            const isExpanded = expandedSKUs.has(sku.item.id);
+            const cheapestPrice = sku.entries.length > 0 ? Math.min(...sku.entries.map(e => e.price)) : 0;
+            const cheapestSupplier = sku.entries.find(e => e.price === cheapestPrice);
+            const targetDiff = sku.targetPrice > 0 ? sku.weightedAvgPrice - sku.targetPrice : 0;
 
             // In exceptions mode, only show SKUs with exceptions
             if (exceptionsMode) {
@@ -605,7 +648,7 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
             }
 
             return (
-              <div key={sku.item.id} className="bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 overflow-hidden">
+              <div key={sku.item.id} className="bg-gradient-to-br from-slate-800/40 via-emerald-900/20 to-slate-800/40 backdrop-blur-xl rounded-2xl border-2 border-emerald-400/30 overflow-hidden shadow-2xl hover:border-emerald-400/50 transition-all">
                 {/* SKU Header */}
                 <div className="bg-gradient-to-r from-emerald-500/15 to-lime-500/15 px-6 py-5 border-b border-white/10">
                   <div className="flex items-center justify-between flex-wrap gap-4">
@@ -662,122 +705,107 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                   </div>
                 </div>
 
-                {/* Volume Needed Input & Lock Button */}
-                <div className="p-6 bg-white/5 border-b border-white/10">
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <div className="flex-1 min-w-[200px]">
-                      <label className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2 block">
-                        Total Volume Needed
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={sku.volumeNeeded || ''}
-                        onChange={(e) => updateVolumeNeeded(sku.item.id, parseInt(e.target.value) || 0)}
-                        disabled={sku.isLocked || exceptionsMode}
-                        placeholder="0"
-                        className="w-full px-4 py-3 border-2 border-white/20 rounded-xl text-right font-black text-xl text-white bg-white/10 focus:outline-none focus:ring-4 focus:ring-emerald-400/50 focus:border-emerald-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {!exceptionsMode && (
-                        <button
-                          onClick={() => toggleLockSKU(sku.item.id)}
-                          className={`flex items-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
-                            sku.isLocked
-                              ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/50 hover:bg-emerald-500/40'
-                              : 'bg-white/10 text-white/80 border border-white/20 hover:bg-white/20'
-                          }`}
-                        >
-                          {sku.isLocked ? (
-                            <>
-                              <Lock className="w-4 h-4" />
-                              Unlock
-                            </>
-                          ) : (
-                            <>
-                              <Unlock className="w-4 h-4" />
-                              Lock SKU
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* AI Target Price Mode (if not locked and not in exceptions mode) */}
-                {!sku.isLocked && !exceptionsMode && (
-                  <div className="p-6 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-b border-white/10">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Brain className="w-5 h-5 text-blue-300" />
-                      <h4 className="text-lg font-bold text-white">AI Target Price Mode</h4>
-                      <button
-                        onClick={() => setSkuAllocations(prev => prev.map(s => 
-                          s.item.id === sku.item.id ? { ...s, aiModeEnabled: !s.aiModeEnabled } : s
-                        ))}
-                        className={`ml-auto px-3 py-1 rounded-lg text-sm font-semibold transition-all ${
-                          sku.aiModeEnabled
-                            ? 'bg-blue-500/30 text-blue-200 border border-blue-400/50'
-                            : 'bg-white/10 text-white/60 border border-white/20'
-                        }`}
-                      >
-                        {sku.aiModeEnabled ? 'Enabled' : 'Enable'}
-                      </button>
-                    </div>
-
-                    {sku.aiModeEnabled && (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2 block">
-                            Target Avg Price
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={sku.targetPrice || ''}
-                            onChange={(e) => setSkuAllocations(prev => prev.map(s => 
-                              s.item.id === sku.item.id ? { ...s, targetPrice: parseFloat(e.target.value) || 0 } : s
-                            ))}
-                            className="w-full px-4 py-2 border-2 border-white/20 rounded-lg text-right font-bold text-lg text-white bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-400/50"
-                          />
+                {/* Expandable Details Section */}
+                {isExpanded && (
+                  <div className="border-t-2 border-white/10 bg-white/5">
+                    {/* AI Suggestions Panel */}
+                    {!exceptionsMode && (
+                      <div className="p-6 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-blue-500/10 border-b border-white/10">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Brain className="w-5 h-5 text-blue-300" />
+                          <h4 className="text-lg font-bold text-white">AI Suggestions</h4>
                         </div>
-
-                        <div>
-                          <label className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2 block">
-                            Fairness vs Cheapest: {sku.fairnessWeight}%
-                          </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={sku.fairnessWeight}
-                            onChange={(e) => setSkuAllocations(prev => prev.map(s => 
-                              s.item.id === sku.item.id ? { ...s, fairnessWeight: parseInt(e.target.value) } : s
-                            ))}
-                            className="w-full"
-                          />
-                          <div className="flex justify-between text-xs text-white/60 mt-1">
-                            <span>Cheapest</span>
-                            <span>Fair</span>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="bg-white/10 rounded-xl p-4 border border-white/20">
+                            <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2">Cheapest Mix</div>
+                            <div className="text-xl font-black text-blue-300">
+                              {cheapestSupplier ? formatCurrency(cheapestPrice) : '-'}
+                            </div>
+                            <div className="text-xs text-white/50 mt-1">
+                              {cheapestSupplier ? `All to ${cheapestSupplier.supplier_name}` : 'No suppliers'}
+                            </div>
+                          </div>
+                          <div className="bg-white/10 rounded-xl p-4 border border-white/20">
+                            <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2">Target Status</div>
+                            {sku.targetPrice > 0 ? (
+                              <>
+                                <div className={`text-xl font-black flex items-center gap-2 ${
+                                  Math.abs(targetDiff) < 0.01 ? 'text-green-300' :
+                                  targetDiff > 0 ? 'text-orange-300' : 'text-blue-300'
+                                }`}>
+                                  {targetDiff > 0 ? (
+                                    <TrendingUp className="w-5 h-5" />
+                                  ) : targetDiff < 0 ? (
+                                    <TrendingDown className="w-5 h-5" />
+                                  ) : (
+                                    <CheckCircle className="w-5 h-5" />
+                                  )}
+                                  {Math.abs(targetDiff) < 0.01 ? 'On Target' : 
+                                   targetDiff > 0 ? `+${formatCurrency(targetDiff)}` : 
+                                   formatCurrency(Math.abs(targetDiff))}
+                                </div>
+                                <div className="text-xs text-white/50 mt-1">
+                                  {targetDiff > 0 ? 'Above target' : targetDiff < 0 ? 'Below target' : 'Perfect'}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-xl font-black text-white/50">Not Set</div>
+                                <div className="text-xs text-white/50 mt-1">Set target price above</div>
+                              </>
+                            )}
+                          </div>
+                          <div className="bg-white/10 rounded-xl p-4 border border-white/20">
+                            <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2">Fairness Score</div>
+                            <div className="text-xl font-black text-purple-300">
+                              {sku.fairnessWeight}%
+                            </div>
+                            <div className="text-xs text-white/50 mt-1">
+                              {sku.fairnessWeight === 0 ? 'Pure cheapest' :
+                               sku.fairnessWeight === 100 ? 'Pure history' :
+                               'Balanced'}
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex items-end">
-                          <button
-                            onClick={() => handleAIAutoAllocate(sku)}
-                            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl"
-                          >
-                            <Zap className="w-5 h-5" />
-                            Auto Allocate
-                          </button>
-                        </div>
+                        {/* AI Controls */}
+                        {!sku.isLocked && (
+                          <div className="mt-4 pt-4 border-t border-white/10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs text-white/70 font-bold uppercase tracking-wider mb-2 block">
+                                  Fairness vs Cheapest: {sku.fairnessWeight}%
+                                </label>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  value={sku.fairnessWeight}
+                                  onChange={(e) => setSkuAllocations(prev => prev.map(s => 
+                                    s.item.id === sku.item.id ? { ...s, fairnessWeight: parseInt(e.target.value) } : s
+                                  ))}
+                                  className="w-full"
+                                />
+                                <div className="flex justify-between text-xs text-white/60 mt-1">
+                                  <span>Cheapest</span>
+                                  <span>Fair</span>
+                                </div>
+                              </div>
+                              <div className="flex items-end">
+                                <button
+                                  onClick={() => handleAIAutoAllocate(sku)}
+                                  disabled={sku.targetPrice <= 0}
+                                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Zap className="w-5 h-5" />
+                                  Auto Allocate to Target
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
-                )}
 
                 {/* Supplier Allocation Table */}
                 <div className="overflow-x-auto">
