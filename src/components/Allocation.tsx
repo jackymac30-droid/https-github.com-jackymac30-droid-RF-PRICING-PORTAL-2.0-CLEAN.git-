@@ -857,12 +857,12 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                       <div className="text-[10px] text-white/50">{sku.item.pack_size}</div>
                     </div>
 
-                    {/* 4 Key Metrics - Prominent & Properly Sized */}
-                    <div className="grid grid-cols-4 gap-4 flex-1 min-w-0">
-                      <div className="bg-white/8 backdrop-blur-sm rounded-xl p-3 border border-white/20 text-center min-w-0">
-                        <div className="text-[9px] text-white/50 font-bold uppercase tracking-widest mb-1.5">Total Needed</div>
+                    {/* 4 Key Metrics - Perfect Fit & Futuristic */}
+                    <div className="grid grid-cols-4 gap-3 flex-1">
+                      <div className="bg-white/8 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center overflow-hidden">
+                        <div className="text-[8px] text-white/40 font-bold uppercase tracking-widest mb-1.5">Total Needed</div>
                         {sku.isLocked || exceptionsMode ? (
-                          <div className="text-xl font-black text-white leading-tight truncate">{sku.volumeNeeded.toLocaleString()}</div>
+                          <div className="text-lg font-black text-white leading-none break-words">{sku.volumeNeeded.toLocaleString()}</div>
                         ) : (
                           <input
                             type="number"
@@ -870,29 +870,29 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                             value={sku.volumeNeeded || ''}
                             onChange={(e) => updateVolumeNeeded(sku.item.id, parseInt(e.target.value) || 0)}
                             placeholder="0"
-                            className="w-full text-xl font-black text-white bg-transparent border-none outline-none text-center focus:ring-0 p-0 leading-tight placeholder:text-white/30"
+                            className="w-full text-lg font-black text-white bg-transparent border-none outline-none text-center focus:ring-0 p-0 leading-none placeholder:text-white/30"
                           />
                         )}
                       </div>
-                      <div className="bg-white/8 backdrop-blur-sm rounded-xl p-3 border border-white/20 text-center min-w-0">
-                        <div className="text-[9px] text-white/50 font-bold uppercase tracking-widest mb-1.5">Allocated</div>
-                        <div className={`text-xl font-black leading-tight truncate ${
+                      <div className="bg-white/8 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center overflow-hidden">
+                        <div className="text-[8px] text-white/40 font-bold uppercase tracking-widest mb-1.5">Allocated</div>
+                        <div className={`text-lg font-black leading-none break-words ${
                           isComplete ? 'text-green-300' : isOver ? 'text-red-300' : 'text-emerald-300'
                         }`}>
                           {sku.totalAllocated.toLocaleString()}
                         </div>
                       </div>
-                      <div className="bg-white/8 backdrop-blur-sm rounded-xl p-3 border border-white/20 text-center min-w-0">
-                        <div className="text-[9px] text-white/50 font-bold uppercase tracking-widest mb-1.5">Remaining</div>
-                        <div className={`text-xl font-black leading-tight truncate ${
+                      <div className="bg-white/8 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center overflow-hidden">
+                        <div className="text-[8px] text-white/40 font-bold uppercase tracking-widest mb-1.5">Remaining</div>
+                        <div className={`text-lg font-black leading-none break-words ${
                           remaining === 0 ? 'text-green-300' : remaining > 0 ? 'text-orange-300' : 'text-red-300'
                         }`}>
                           {remaining === 0 ? '✓' : remaining.toLocaleString()}
                         </div>
                       </div>
-                      <div className="bg-gradient-to-br from-emerald-500/20 to-lime-500/20 backdrop-blur-sm rounded-xl p-3 border border-emerald-400/30 text-center ring-1 ring-emerald-400/20 min-w-0">
-                        <div className="text-[9px] text-emerald-200/70 font-bold uppercase tracking-widest mb-1.5">Weighted Avg</div>
-                        <div className="text-xl font-black text-white leading-tight truncate">
+                      <div className="bg-gradient-to-br from-emerald-500/25 to-lime-500/25 backdrop-blur-sm rounded-lg p-3 border border-emerald-400/40 text-center ring-1 ring-emerald-400/30 overflow-hidden shadow-lg shadow-emerald-500/10">
+                        <div className="text-[8px] text-emerald-200/80 font-bold uppercase tracking-widest mb-1.5">Weighted Avg</div>
+                        <div className="text-lg font-black text-white leading-none break-words">
                           {sku.weightedAvgPrice > 0 ? formatCurrency(sku.weightedAvgPrice) : '-'}
                         </div>
                       </div>
@@ -961,13 +961,13 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                                 'border-white/10'
                               }`}
                             >
-                              <div className="grid grid-cols-5 gap-4 items-center">
+                              <div className="grid grid-cols-5 gap-3 items-center">
                                 {/* Supplier */}
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="font-semibold text-white text-xs truncate">{entry.supplier_name}</div>
+                                <div className="min-w-0 overflow-hidden">
+                                  <div className="flex items-center gap-1">
+                                    <div className="font-semibold text-white text-[11px] truncate">{entry.supplier_name}</div>
                                     {isCheapest && (
-                                      <span className="px-1 py-0.5 bg-emerald-500/30 text-emerald-200 rounded text-[9px] font-bold shrink-0">
+                                      <span className="px-1 py-0.5 bg-emerald-500/30 text-emerald-200 rounded text-[8px] font-bold shrink-0">
                                         Low
                                       </span>
                                     )}
@@ -975,8 +975,8 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                                 </div>
 
                                 {/* Unit Cost */}
-                                <div className="text-right min-w-0">
-                                  <div className="font-semibold text-white text-xs truncate">{formatCurrency(entry.price)}</div>
+                                <div className="text-right min-w-0 overflow-hidden">
+                                  <div className="font-semibold text-white text-[11px] truncate">{formatCurrency(entry.price)}</div>
                                 </div>
 
                                 {/* Offered */}
@@ -985,9 +985,9 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                                 </div>
 
                                 {/* Allocated */}
-                                <div className="text-right min-w-0">
+                                <div className="text-right min-w-0 overflow-hidden">
                                   {sku.isLocked || exceptionsMode ? (
-                                    <div className="font-semibold text-white text-xs truncate">
+                                    <div className="font-semibold text-white text-[11px] truncate">
                                       {entry.awarded_volume > 0 ? entry.awarded_volume.toLocaleString() : '-'}
                                     </div>
                                   ) : (
@@ -1002,14 +1002,14 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                                         parseInt(e.target.value) || 0
                                       )}
                                       placeholder="0"
-                                      className="w-16 px-1.5 py-0.5 border border-white/20 rounded text-right font-semibold text-xs text-white bg-white/10 focus:outline-none focus:ring-1 focus:ring-emerald-400/50"
+                                      className="w-full max-w-[60px] px-1.5 py-0.5 border border-white/20 rounded text-right font-semibold text-[11px] text-white bg-white/10 focus:outline-none focus:ring-1 focus:ring-emerald-400/50"
                                     />
                                   )}
                                 </div>
 
                                 {/* Row Cost */}
-                                <div className="text-right min-w-0">
-                                  <div className="font-semibold text-emerald-300 text-xs truncate">
+                                <div className="text-right min-w-0 overflow-hidden">
+                                  <div className="font-semibold text-emerald-300 text-[11px] truncate">
                                     {rowCost > 0 ? formatCurrency(rowCost) : '-'}
                                   </div>
                                 </div>
