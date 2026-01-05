@@ -22,7 +22,8 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
 
     // 1. Insert Suppliers
     logger.debug('📦 Adding suppliers...');
-    // Try to insert suppliers - if updated_at column doesn't exist, we'll handle it
+    // Note: Do NOT include updated_at in the insert - let the trigger handle it
+    // If you get an error about updated_at, run FIX_SUPPLIERS_UPDATED_AT_COMPLETE.sql in Supabase SQL Editor
     const supplierData = [
       { name: 'Fresh Farms Inc', email: 'supplier1@freshfarms.com' },
       { name: 'Berry Best Co', email: 'supplier2@berrybest.com' },

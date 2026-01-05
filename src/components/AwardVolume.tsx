@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Award, Save, Check, Package, Unlock, AlertTriangle, Send, RefreshCw, Lock, Info, CheckCircle } from 'lucide-react';
+import { Award, Save, Check, Package, Unlock, AlertTriangle, Send, RefreshCw, Lock, Info, CheckCircle, Zap } from 'lucide-react';
 import {
   fetchItems,
   fetchQuotesWithDetails,
@@ -25,7 +25,7 @@ interface VolumeEntry {
   supplier_id: string;
   price: number;
   dlvd_price: number | null;
-  awarded_volume: number;
+  awarded_volume: number; // This is the draft/proposed volume (saved to DB as draft)
   rank: number;
   supplier_response_status?: string | null;
   supplier_response_volume?: number | null;
@@ -88,6 +88,17 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       volumeNeedsData.forEach(vn => {
         needsMap.set(vn.item_id, vn.volume_needed || 0);
       });
+      
+      // If no volume needs exist for any items, initialize with 0 for all items
+      // This prevents UI from breaking when seed volume hasn't been set yet
+      if (needsMap.size === 0 && itemsData.length > 0) {
+        itemsData.forEach(item => {
+          if (!needsMap.has(item.id)) {
+            needsMap.set(item.id, 0);
+          }
+        });
+      }
+      
       setVolumeNeeds(needsMap);
 
       setLastWeekDeliveredPrices(lastWeekPricesData);
@@ -141,6 +152,13 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       const freshVolumeNeeds = new Map<string, number>();
       volumeNeedsData.forEach(vn => {
         freshVolumeNeeds.set(vn.item_id, vn.volume_needed || 0);
+      });
+      
+      // Ensure all items have volume_needed entry (default to 0 if missing - prevents UI breakage)
+      items.forEach(item => {
+        if (!freshVolumeNeeds.has(item.id)) {
+          freshVolumeNeeds.set(item.id, 0);
+        }
       });
 
       // Create a map of item_id -> { dlvd_price, margin, rebate, freight } from internal pricing calculations
@@ -576,7 +594,16 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     if (!selectedWeek || !session) return;
 
     // Validation: Week must be finalized (soft copy)
-    if (selectedWeek.status !== 'finalized') {
+    // Check database status, not just prop
+    const { supabase } = await import('../utils/supabase');
+    const { data: weekCheck } = await supabase
+      .from('weeks')
+      .select('status')
+      .eq('id', selectedWeek.id)
+      .single();
+    
+    const actualStatus = weekCheck?.status || selectedWeek.status;
+    if (actualStatus !== 'finalized') {
       showToast('Heads up: Please finalize pricing before sending allocations', 'error');
       return;
     }
@@ -681,24 +708,50 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
     );
   }
 
-  // Show helpful message if pricing isn't finalized yet
-  if (selectedWeek.status !== 'finalized' && selectedWeek.status !== 'closed') {
+  // Check if there are any finalized quotes (per-quote finalization check)
+  const [hasFinalizedQuotes, setHasFinalizedQuotes] = useState(false);
+  
+  useEffect(() => {
+    const checkFinalizedQuotes = async () => {
+      if (!selectedWeek?.id) {
+        setHasFinalizedQuotes(false);
+        return;
+      }
+      
+      try {
+        const quotes = await fetchQuotesWithDetails(selectedWeek.id);
+        const hasAnyFinalized = quotes.some(q => q.rf_final_fob !== null && q.rf_final_fob !== undefined && q.rf_final_fob > 0);
+        setHasFinalizedQuotes(hasAnyFinalized);
+      } catch (err) {
+        logger.error('Error checking finalized quotes:', err);
+        setHasFinalizedQuotes(false);
+      }
+    };
+    
+    checkFinalizedQuotes();
+  }, [selectedWeek?.id, selectedWeek?.status]);
+
+  // Allow Volume tab if week is finalized/closed OR if there's at least one finalized quote (per-quote workflow)
+  const currentStatus = selectedWeek?.status;
+  const canAccessVolume = currentStatus === 'finalized' || currentStatus === 'closed' || hasFinalizedQuotes;
+  
+  if (!canAccessVolume) {
     return (
       <div className="bg-white/10 backdrop-blur-md rounded-xl shadow-lg p-12 text-center border border-white/20">
         <Info className="w-16 h-16 text-white/40 mx-auto mb-6" />
         <h3 className="text-2xl font-bold text-white mb-3">Volume Allocation Not Available Yet</h3>
-        <p className="text-white/70 mb-2 text-lg">Volume allocation will be available after pricing is finalized.</p>
-        <p className="text-white/50 text-sm mb-4">Complete the pricing workflow in the Pricing tab first, then return here to allocate volumes.</p>
+        <p className="text-white/70 mb-2 text-lg">Volume allocation will be available after at least one quote is finalized.</p>
+        <p className="text-white/50 text-sm mb-4">Go to the Pricing tab and finalize at least one supplier's pricing per SKU, then return here to allocate volumes.</p>
         <div className="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-4 mt-4 max-w-md mx-auto">
-          <p className="text-sm text-emerald-200 font-semibold">💡 Tip: Go to the Pricing tab and click "Finalize Week Pricing" when ready</p>
+          <p className="text-sm text-emerald-200 font-semibold">💡 Tip: Finalize individual supplier quotes in the Pricing tab - you can finalize one shipper at a time</p>
         </div>
       </div>
     );
   }
 
   // Determine if week is locked (closed and not emergency unlocked)
-  const isLocked = selectedWeek.status === 'closed' && !selectedWeek.emergency_unlock_enabled;
-  const canEdit = selectedWeek.status === 'finalized' || (selectedWeek.status === 'closed' && selectedWeek.emergency_unlock_enabled);
+  const isLocked = currentStatus === 'closed' && !selectedWeek.emergency_unlock_enabled;
+  const canEdit = currentStatus === 'finalized' || (currentStatus === 'closed' && selectedWeek.emergency_unlock_enabled);
 
   return (
     <div className="space-y-6">
@@ -761,7 +814,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
             )}
 
             {/* Save Volume Needs button - show when finalized/closed and can edit */}
-            {(selectedWeek?.status === 'finalized' || (selectedWeek?.status === 'closed' && selectedWeek?.emergency_unlock_enabled)) && (
+            {(currentStatus === 'finalized' || (currentStatus === 'closed' && selectedWeek?.emergency_unlock_enabled)) && (
               <button
                 onClick={saveVolumeNeeds}
                 disabled={saving || (!canEdit && !selectedWeek?.emergency_unlock_enabled)}
@@ -828,7 +881,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
       <div className="bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 overflow-hidden">
         <div className="p-6">
           {/* Show finalize pricing banner if still open */}
-          {selectedWeek && (selectedWeek.status as string) === 'open' && canFinalizePricing ? (
+          {selectedWeek && (currentStatus as string) === 'open' && canFinalizePricing ? (
             <div className="space-y-6">
               {canFinalizePricing ? (
                 <div className="bg-gradient-to-r from-emerald-500/20 to-lime-500/20 border-2 border-emerald-400/50 rounded-xl p-6 mb-4 backdrop-blur-sm shadow-lg">
@@ -861,7 +914,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                     </div>
                   </div>
                 </div>
-              ) : selectedWeek?.status !== 'finalized' && selectedWeek?.status !== 'closed' ? (
+              ) : currentStatus !== 'finalized' && currentStatus !== 'closed' ? (
                 <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4 mb-4">
                   <div className="flex items-center gap-3">
                     <Lock className="w-5 h-5 text-orange-300" />
@@ -942,7 +995,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
             ) : (
             <div className="space-y-4">
               {/* Show lock message if conditions aren't met */}
-              {selectedWeek?.status !== 'finalized' && selectedWeek?.status !== 'closed' ? (
+              {currentStatus !== 'finalized' && currentStatus !== 'closed' ? (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
                   <div className="flex items-center gap-3">
                     <Lock className="w-5 h-5 text-orange-300" />
@@ -959,10 +1012,53 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                     <p className="text-sm text-white/90 ml-9">
                       Distribute cases among suppliers based on their final pricing. Only suppliers who have completed pricing negotiations are shown below.
                     </p>
+                    <div className="mt-3 ml-9 flex items-center gap-3">
+                      <button
+                        onClick={async () => {
+                          // Fill cheapest: Auto-allocate all volume to cheapest supplier per SKU
+                          if (!selectedWeek || !canEdit) return;
+                          
+                          let filledCount = 0;
+                          for (const sku of skuVolumes) {
+                            if (sku.volumeNeeded > 0 && sku.entries.length > 0) {
+                              // Sort by price (cheapest first)
+                              const sortedEntries = [...sku.entries].sort((a, b) => a.price - b.price);
+                              const cheapest = sortedEntries[0];
+                              
+                              // Clear all volumes for this SKU first (update UI state)
+                              for (const entry of sku.entries) {
+                                updateVolume(sku.item.id, entry.supplier_id, entry.quote_id, '0');
+                              }
+                              
+                              // Small delay to let UI update
+                              await new Promise(resolve => setTimeout(resolve, 100));
+                              
+                              // Set all volume to cheapest supplier
+                              updateVolume(sku.item.id, cheapest.supplier_id, cheapest.quote_id, sku.volumeNeeded.toString());
+                              filledCount++;
+                            }
+                          }
+                          
+                          if (filledCount > 0) {
+                            showToast(`Filled ${filledCount} SKU(s) with cheapest supplier`, 'success');
+                            // Wait for debounced saves to complete, then reload
+                            setTimeout(async () => {
+                              await loadVolumeData();
+                            }, 1000);
+                          }
+                        }}
+                        disabled={!canEdit || skuVolumes.length === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/50 text-blue-200 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Zap className="w-4 h-4" />
+                        Fill Cheapest
+                      </button>
+                      <span className="text-xs text-white/60">Auto-allocates all volume to lowest-price supplier per SKU</span>
+                    </div>
                   </div>
 
                   {/* Show allocation content if pricing is finalized/closed */}
-                  {(selectedWeek?.status === 'finalized' || selectedWeek?.status === 'closed') ? (
+                  {(currentStatus === 'finalized' || currentStatus === 'closed') ? (
                     <>
                       {skuVolumes.length === 0 ? (
                         <div className="text-center py-12 bg-white/5 rounded-xl border border-white/10">
@@ -972,15 +1068,64 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                         </div>
                       ) : (
                         <div className="space-y-6">
+                          {/* Overall Totals Summary */}
+                          {(() => {
+                            const overallTotalVolume = skuVolumes.reduce((sum, sku) => sum + sku.totalVolume, 0);
+                            const overallTotalNeeded = skuVolumes.reduce((sum, sku) => sum + sku.volumeNeeded, 0);
+                            const overallTotalCost = skuVolumes.reduce((sum, sku) => {
+                              const skuCost = sku.entries.reduce((s, e) => s + (e.price * e.awarded_volume), 0);
+                              return sum + skuCost;
+                            }, 0);
+                            const overallWeightedAvg = overallTotalVolume > 0 
+                              ? skuVolumes.reduce((sum, sku) => {
+                                  const skuCost = sku.entries.reduce((s, e) => s + (e.price * e.awarded_volume), 0);
+                                  return sum + skuCost;
+                                }, 0) / overallTotalVolume
+                              : 0;
+                            const overallGap = overallTotalNeeded - overallTotalVolume;
+                            
+                            return (
+                              <div className="bg-gradient-to-r from-blue-500/20 to-indigo-500/20 border-2 border-blue-400/50 rounded-xl p-6 mb-4">
+                                <div className="flex items-center justify-between flex-wrap gap-4">
+                                  <div>
+                                    <h4 className="text-lg font-black text-white mb-2">Overall Allocation Summary</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                      <div>
+                                        <span className="text-white/70">Total Volume:</span>
+                                        <div className="text-xl font-black text-white">{overallTotalVolume.toLocaleString()} / {overallTotalNeeded.toLocaleString()}</div>
+                                      </div>
+                                      <div>
+                                        <span className="text-white/70">Total Cost:</span>
+                                        <div className="text-xl font-black text-emerald-200">{formatCurrency(overallTotalCost)}</div>
+                                      </div>
+                                      <div>
+                                        <span className="text-white/70">Weighted Avg:</span>
+                                        <div className="text-xl font-black text-white">{formatCurrency(overallWeightedAvg)}</div>
+                                      </div>
+                                      <div>
+                                        <span className="text-white/70">Gap:</span>
+                                        <div className={`text-xl font-black ${overallGap === 0 ? 'text-green-300' : overallGap > 0 ? 'text-orange-300' : 'text-red-300'}`}>
+                                          {overallGap === 0 ? '✓ Complete' : overallGap > 0 ? `${overallGap.toLocaleString()} short` : `${Math.abs(overallGap).toLocaleString()} over`}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          
                           {skuVolumes.map((sku) => {
                         const remaining = sku.volumeNeeded - sku.totalVolume;
                 const isComplete = sku.totalVolume === sku.volumeNeeded && sku.volumeNeeded > 0;
                 const isOver = sku.totalVolume > sku.volumeNeeded && sku.volumeNeeded > 0;
 
+                // Calculate costs for this SKU
                 const weightedTotal = sku.entries.reduce((sum, entry) => {
                   return sum + (entry.price * entry.awarded_volume);
                 }, 0);
                 const avgFOB = sku.totalVolume > 0 ? weightedTotal / sku.totalVolume : 0;
+                const skuTotalCost = weightedTotal; // Total FOB cost for this SKU
 
                 // Get pricing data from internal pricing calculations
                 const pricingData = pricingCalculations.get(sku.item.id);
@@ -1072,15 +1217,26 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                             <Info className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-white/80 font-semibold">Avg FOB Price:</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-2xl font-black text-white">
-                              {sku.totalVolume > 0 ? formatCurrency(avgFOB) : (sku.entries.length > 0 ? formatCurrency(sku.entries.reduce((sum, e) => sum + e.price, 0) / sku.entries.length) : '$0.00')}
-                            </span>
-                            {/* Subtle signal placeholder - would compare to last week */}
-                            <span className="text-xs text-white/40">weighted</span>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-white/80 font-semibold">Avg FOB Price:</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-2xl font-black text-white">
+                                {sku.totalVolume > 0 ? formatCurrency(avgFOB) : (sku.entries.length > 0 ? formatCurrency(sku.entries.reduce((sum, e) => sum + e.price, 0) / sku.entries.length) : '$0.00')}
+                              </span>
+                              <span className="text-xs text-white/40">weighted</span>
+                            </div>
                           </div>
+                          {skuTotalCost > 0 && (
+                            <div className="pt-3 border-t border-white/5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-white/80 font-semibold">SKU Total Cost:</span>
+                                <span className="text-xl font-black text-emerald-200">
+                                  {formatCurrency(skuTotalCost)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="bg-blue-500/10 border border-blue-400/20 rounded-xl p-5">
@@ -1154,6 +1310,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                             <th className="px-4 py-4 text-left text-xs font-black text-white uppercase tracking-wider">Supplier</th>
                             <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">FOB Price</th>
                             <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">Award Cases</th>
+                            <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">Row Cost</th>
                             <th className="px-4 py-4 text-center text-xs font-black text-white uppercase tracking-wider">Status</th>
                             <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">Confirmed</th>
                             <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">%</th>
@@ -1164,6 +1321,9 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                             const percentage = sku.volumeNeeded > 0
                               ? ((entry.awarded_volume / sku.volumeNeeded) * 100).toFixed(1)
                               : '0.0';
+                            
+                            // Row cost = unit price * proposed volume
+                            const rowCost = entry.price * entry.awarded_volume;
 
                             return (
                               <tr
@@ -1214,6 +1374,16 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                                     />
                                   ) : (
                                     <div className="font-black text-white text-base">{entry.awarded_volume > 0 ? entry.awarded_volume.toLocaleString() : '-'}</div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4 text-right">
+                                  <div className="font-black text-white text-base">
+                                    {rowCost > 0 ? formatCurrency(rowCost) : '-'}
+                                  </div>
+                                  {rowCost > 0 && (
+                                    <div className="text-xs text-white/50 mt-0.5">
+                                      {formatCurrency(entry.price)} × {entry.awarded_volume.toLocaleString()}
+                                    </div>
                                   )}
                                 </td>
                                 <td className="px-4 py-4 text-center">
@@ -1267,7 +1437,7 @@ export function AwardVolume({ selectedWeek, onWeekUpdate }: AwardVolumeProps) {
                       )}
 
                       {/* Internal Pricing Calculations - Show for all items with finalized pricing */}
-                      {selectedWeek?.status === 'finalized' && items.length > 0 && (
+                      {currentStatus === 'finalized' && items.length > 0 && (
                         <div className="mt-8">
                           <PricingCalculations
                             weekId={selectedWeek.id}

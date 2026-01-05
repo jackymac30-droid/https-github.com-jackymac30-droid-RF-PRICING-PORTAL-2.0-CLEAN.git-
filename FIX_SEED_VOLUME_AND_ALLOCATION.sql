@@ -1,0 +1,116 @@
+-- ============================================
+-- FIX: Seed Volume Loading + Allocation Feature
+-- ============================================
+-- Run this in Supabase SQL Editor to fix seed volume loading
+-- and enable auto-seeding for new weeks
+-- ============================================
+
+-- Step 1: Fix RLS Policies
+DROP POLICY IF EXISTS "Authenticated users can read volume needs" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Authenticated users can insert volume needs" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Authenticated users can update volume needs" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Authenticated users can delete volume needs" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Allow public read access to week_item_volumes" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Allow public insert to week_item_volumes" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Allow public update to week_item_volumes" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Allow public delete from week_item_volumes" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Public can view week_item_volumes" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Public can insert week_item_volumes" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Public can update week_item_volumes" ON public.week_item_volumes;
+DROP POLICY IF EXISTS "Public can delete week_item_volumes" ON public.week_item_volumes;
+
+-- Ensure table exists
+CREATE TABLE IF NOT EXISTS public.week_item_volumes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  week_id uuid NOT NULL REFERENCES public.weeks(id) ON DELETE CASCADE,
+  item_id uuid NOT NULL REFERENCES public.items(id) ON DELETE CASCADE,
+  volume_needed integer DEFAULT 0,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE (week_id, item_id)
+);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_week_item_volumes_week_id ON public.week_item_volumes(week_id);
+CREATE INDEX IF NOT EXISTS idx_week_item_volumes_item_id ON public.week_item_volumes(item_id);
+
+-- Enable RLS
+ALTER TABLE public.week_item_volumes ENABLE ROW LEVEL SECURITY;
+
+-- Create clean public access policies
+CREATE POLICY "Allow public read access to week_item_volumes"
+  ON public.week_item_volumes FOR SELECT TO public USING (true);
+
+CREATE POLICY "Allow public insert to week_item_volumes"
+  ON public.week_item_volumes FOR INSERT TO public WITH CHECK (true);
+
+CREATE POLICY "Allow public update to week_item_volumes"
+  ON public.week_item_volumes FOR UPDATE TO public USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow public delete from week_item_volumes"
+  ON public.week_item_volumes FOR DELETE TO public USING (true);
+
+-- Step 2: Create Auto-Seed Function
+CREATE OR REPLACE FUNCTION auto_seed_volume_needs_for_week()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- When a new week is created, automatically create week_item_volumes rows for all items
+  INSERT INTO public.week_item_volumes (week_id, item_id, volume_needed, created_at, updated_at)
+  SELECT 
+    NEW.id,
+    items.id,
+    0, -- Default to 0, RF will set actual values later
+    NOW(),
+    NOW()
+  FROM public.items
+  ON CONFLICT (week_id, item_id) DO NOTHING;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+-- Step 3: Create Trigger
+DROP TRIGGER IF EXISTS trigger_auto_seed_volume_needs ON public.weeks;
+
+CREATE TRIGGER trigger_auto_seed_volume_needs
+  AFTER INSERT ON public.weeks
+  FOR EACH ROW
+  EXECUTE FUNCTION auto_seed_volume_needs_for_week();
+
+-- Step 4: Backfill Existing Weeks (create missing rows)
+INSERT INTO public.week_item_volumes (week_id, item_id, volume_needed, created_at, updated_at)
+SELECT 
+  w.id,
+  i.id,
+  0,
+  NOW(),
+  NOW()
+FROM public.weeks w
+CROSS JOIN public.items i
+WHERE NOT EXISTS (
+  SELECT 1 
+  FROM public.week_item_volumes wiv 
+  WHERE wiv.week_id = w.id AND wiv.item_id = i.id
+)
+ON CONFLICT (week_id, item_id) DO NOTHING;
+
+-- ============================================
+-- Verification Query
+-- ============================================
+-- Run this to check if all weeks have volume_needed rows:
+/*
+SELECT 
+  w.week_number,
+  COUNT(DISTINCT i.id) as total_items,
+  COUNT(DISTINCT wiv.id) as volume_rows,
+  CASE 
+    WHEN COUNT(DISTINCT i.id) = COUNT(DISTINCT wiv.id) THEN '✓ Complete'
+    ELSE '✗ Missing rows'
+  END as status
+FROM public.weeks w
+CROSS JOIN public.items i
+LEFT JOIN public.week_item_volumes wiv ON wiv.week_id = w.id AND wiv.item_id = i.id
+GROUP BY w.week_number, w.id
+ORDER BY w.week_number DESC;
+*/
+

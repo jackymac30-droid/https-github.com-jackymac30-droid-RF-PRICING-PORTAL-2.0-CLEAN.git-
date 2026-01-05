@@ -71,6 +71,7 @@ export function RFDashboard() {
   const [finalizingItems, setFinalizingItems] = useState<Record<string, boolean>>({});
   const [volumeNeedsMap, setVolumeNeedsMap] = useState<Map<string, number>>(new Map());
   const [volumeNeeds, setVolumeNeeds] = useState<Record<string, number>>({});
+  const [allSuppliersFinalized, setAllSuppliersFinalized] = useState(false);
 
   // Listen for navigation to Volume Acceptance from Award Volume
   useEffect(() => {
@@ -258,6 +259,36 @@ export function RFDashboard() {
       setFinalInputs({});
     }
   }, [selectedWeek, selectedSupplier, loadQuotes]);
+
+  // Check if all suppliers are finalized
+  useEffect(() => {
+    const checkAllSuppliersFinalized = async () => {
+      if (!selectedWeek || selectedWeek.status !== 'open') {
+        setAllSuppliersFinalized(false);
+        return;
+      }
+      
+      try {
+        const allQuotes = await fetchQuotesWithDetails(selectedWeek.id);
+        const supplierIds = new Set(allQuotes.map(q => q.supplier_id));
+        if (supplierIds.size === 0) {
+          setAllSuppliersFinalized(false);
+          return;
+        }
+        
+        const allFinalized = Array.from(supplierIds).every(supplierId => {
+          const supplierQuotes = allQuotes.filter(q => q.supplier_id === supplierId && q.supplier_fob !== null);
+          return supplierQuotes.length > 0 && supplierQuotes.every(q => q.rf_final_fob !== null && q.rf_final_fob !== undefined);
+        });
+        setAllSuppliersFinalized(allFinalized);
+      } catch (err) {
+        logger.error('Error checking all suppliers finalized:', err);
+        setAllSuppliersFinalized(false);
+      }
+    };
+    
+    checkAllSuppliersFinalized();
+  }, [selectedWeek?.id, selectedWeek?.status, submittedSuppliers, finalizedSuppliers, quotes]);
 
   // Multi-Supplier-Per-SKU View:
   // When RF clicks "Quotes" button, this loads ALL suppliers' quotes for that SKU
@@ -464,7 +495,57 @@ export function RFDashboard() {
         // Reload quotes and week data to refresh supplier statuses
         await loadQuotes();
         await loadWeekData();
-        // Don't clear selectedSupplier - let user see the results
+        
+        // Check if this supplier is now fully finalized (all quotes have rf_final_fob)
+        const updatedQuotes = await fetchQuotesWithDetails(selectedWeek!.id, selectedSupplier!.id);
+        const supplierFullyFinalized = updatedQuotes.length > 0 && 
+          updatedQuotes.every(q => q.rf_final_fob !== null && q.rf_final_fob !== undefined);
+        
+        if (supplierFullyFinalized) {
+          showToast(`${selectedSupplier!.name} pricing finalized!`, 'success');
+          
+          // Check if all suppliers for this week are finalized
+          const { supabase } = await import('../utils/supabase');
+          const allQuotes = await fetchQuotesWithDetails(selectedWeek!.id);
+          
+          // Get unique suppliers that have quotes
+          const supplierIds = new Set(allQuotes.map(q => q.supplier_id));
+          const allSuppliersFinalized = Array.from(supplierIds).every(supplierId => {
+            const supplierQuotes = allQuotes.filter(q => q.supplier_id === supplierId && q.supplier_fob !== null);
+            // Supplier is finalized if all their quotes with prices have rf_final_fob
+            return supplierQuotes.length > 0 && supplierQuotes.every(q => q.rf_final_fob !== null);
+          });
+          
+          // If all suppliers are finalized, finalize the week and switch to volume tab
+          if (allSuppliersFinalized && selectedWeek && selectedWeek.status === 'open') {
+            try {
+              const result = await finalizePricingForWeek(selectedWeek.id, session?.user_name || 'RF Manager');
+              if (result.success) {
+                // Fetch updated week status
+                const { data: updatedWeekData } = await supabase
+                  .from('weeks')
+                  .select('*')
+                  .eq('id', selectedWeek.id)
+                  .single();
+                
+                if (updatedWeekData) {
+                  const updatedWeek = updatedWeekData as Week;
+                  setSelectedWeek(updatedWeek);
+                  setWeeks(prev => prev.map(w => w.id === selectedWeek.id ? updatedWeek : w));
+                  
+                  // Clear selected supplier and switch to volume tab
+                  setSelectedSupplier(null);
+                  setTimeout(() => {
+                    setMainView('award_volume');
+                    showToast('All suppliers finalized! Volume allocation is now available.', 'success');
+                  }, 500);
+                }
+              }
+            } catch (err) {
+              logger.error('Error finalizing week:', err);
+            }
+          }
+        }
       } else {
         showToast('No changes were made. All prices may already be finalized.', 'info');
         // Still reload to check if finalize button should appear
@@ -678,7 +759,14 @@ export function RFDashboard() {
   const hasInitialPrices = quotes.some(q => q.supplier_fob !== null);
   const hasCountersSent = quotes.some(q => q.rf_counter_fob !== null);
   const canSendCounters = !isReadOnly && hasInitialPrices && !hasCountersSent;
-  const canSetFinal = !isReadOnly && hasCountersSent;
+  
+  // Check if current supplier is already finalized (all quotes have rf_final_fob)
+  const supplierAlreadyFinalized = quotes.length > 0 && 
+    quotes.filter(q => q.supplier_fob !== null).length > 0 &&
+    quotes.filter(q => q.supplier_fob !== null).every(q => q.rf_final_fob !== null && q.rf_final_fob !== undefined);
+  
+  // Can set final if: not readonly, has counters sent, and supplier NOT already finalized
+  const canSetFinal = !isReadOnly && hasCountersSent && !supplierAlreadyFinalized;
 
   // Pricing Finalization Gates:
   // - Week must be 'open' status
@@ -1651,8 +1739,83 @@ export function RFDashboard() {
                       </p>
                     </div>
                   )}
+                  {supplierAlreadyFinalized && (
+                    <div className="flex flex-col gap-2">
+                      <div className="px-8 py-4 bg-green-500/20 border-2 border-green-400/50 rounded-xl flex items-center justify-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-green-300" />
+                        <span className="text-green-200 font-bold text-lg">Pricing Finalized</span>
+                      </div>
+                      <p className="text-white/60 text-xs text-center max-w-md mx-auto">
+                        {selectedSupplier?.name} pricing is already finalized. Select another supplier or go to Volume tab.
+                      </p>
+                    </div>
+                  )}
                 </div>
-                {canFinalizePricing && (
+                {allSuppliersFinalized && selectedWeek?.status === 'open' && (
+                  <div className="mt-4 p-4 bg-emerald-500/20 border-2 border-emerald-400/50 rounded-xl">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-white/90 text-sm font-bold mb-1 flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-emerald-300" />
+                          All suppliers finalized
+                        </p>
+                        <p className="text-white/70 text-xs">
+                          All supplier pricing is finalized. Finalize the week to unlock volume allocation.
+                        </p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!selectedWeek || finalizingPricing) return;
+                          setFinalizingPricing(true);
+                          try {
+                            const result = await finalizePricingForWeek(selectedWeek.id, session?.user_name || 'RF Manager');
+                            if (result.success) {
+                              const { supabase } = await import('../utils/supabase');
+                              const { data: updatedWeekData } = await supabase
+                                .from('weeks')
+                                .select('*')
+                                .eq('id', selectedWeek.id)
+                                .single();
+                              
+                              if (updatedWeekData) {
+                                const updatedWeek = updatedWeekData as Week;
+                                setSelectedWeek(updatedWeek);
+                                setWeeks(prev => prev.map(w => w.id === selectedWeek.id ? updatedWeek : w));
+                                setSelectedSupplier(null);
+                                setTimeout(() => {
+                                  setMainView('award_volume');
+                                  showToast('Week finalized! Volume allocation is now available.', 'success');
+                                }, 500);
+                              }
+                            } else {
+                              showToast(result.error || 'Failed to finalize week', 'error');
+                            }
+                          } catch (err) {
+                            logger.error('Error finalizing week:', err);
+                            showToast('Failed to finalize week. Please try again.', 'error');
+                          } finally {
+                            setFinalizingPricing(false);
+                          }
+                        }}
+                        disabled={finalizingPricing}
+                        className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {finalizingPricing ? (
+                          <>
+                            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                            Finalizing...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4" />
+                            Finalize Week
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {canFinalizePricing && !allSuppliersFinalized && (
                   <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-400/30 rounded-xl">
                     <p className="text-white/90 text-sm font-semibold mb-1">
                       ✓ Pricing ready to finalize

@@ -457,6 +457,27 @@ export async function createNewWeek(): Promise<Week | null> {
     }
   }
 
+  // Auto-create week_item_volumes rows for all items (seed volume with default 0)
+  // This ensures volume_needed data exists and prevents UI from breaking
+  const volumeNeeds = items.map(item => ({
+    week_id: newWeek.id,
+    item_id: item.id,
+    volume_needed: 0, // Default to 0, RF will set actual values later
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }));
+
+  if (volumeNeeds.length > 0) {
+    const { error: volumeError } = await supabase
+      .from('week_item_volumes')
+      .insert(volumeNeeds);
+
+    if (volumeError) {
+      console.error('Error creating volume needs for new week:', volumeError);
+      // Don't fail week creation if volume needs fail - can be created later
+    }
+  }
+
   return newWeek;
 }
 
@@ -1199,10 +1220,10 @@ export async function fetchDraftAllocations(weekId: string): Promise<{
 
 export async function finalizePricingForWeek(weekId: string, userName: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // Validation: Check that at least some quotes have final pricing set
+    // First, check existing quotes and their pricing data
     const { data: quotes, error: quotesError } = await supabase
       .from('quotes')
-      .select('id, rf_final_fob')
+      .select('id, rf_final_fob, supplier_fob, rf_counter_fob, supplier_response, supplier_revised_fob')
       .eq('week_id', weekId);
 
     if (quotesError) {
@@ -1212,8 +1233,67 @@ export async function finalizePricingForWeek(weekId: string, userName: string): 
 
     const quotesWithFinalPricing = quotes?.filter(q => q.rf_final_fob !== null && q.rf_final_fob !== undefined) || [];
     
+    // If no quotes have rf_final_fob set, try to auto-finalize based on available pricing data
     if (quotesWithFinalPricing.length === 0) {
-      return { success: false, error: 'Cannot finalize: No quotes have final pricing set. Please set rf_final_fob for at least one quote.' };
+      const quotesToAutoFinalize = quotes?.filter(q => 
+        q.rf_final_fob === null && 
+        q.supplier_fob !== null && 
+        q.supplier_fob > 0
+      ) || [];
+      
+      if (quotesToAutoFinalize.length > 0) {
+        logger.debug(`Auto-finalizing ${quotesToAutoFinalize.length} quotes for week ${weekId}`);
+        
+        // Auto-finalize quotes with supplier prices
+        for (const quote of quotesToAutoFinalize) {
+          // Determine final price based on priority:
+          // 1. Supplier revised price (highest priority)
+          // 2. Supplier accepted counter
+          // 3. RF counter (if set, RF confirmed this price)
+          // 4. Supplier's original price (RF accepts initial quote)
+          const finalPrice = quote.supplier_revised_fob || 
+                            (quote.supplier_response === 'accept' && quote.rf_counter_fob ? quote.rf_counter_fob : null) ||
+                            quote.rf_counter_fob || 
+                            quote.supplier_fob;
+          
+          if (finalPrice && finalPrice > 0) {
+            const { error: updateError } = await supabase
+              .from('quotes')
+              .update({ 
+                rf_final_fob: finalPrice,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', quote.id);
+            
+            if (updateError) {
+              logger.error(`Error auto-finalizing quote ${quote.id}:`, updateError);
+            }
+          }
+        }
+        
+        // Re-check after auto-finalization
+        const { data: updatedQuotes, error: recheckError } = await supabase
+          .from('quotes')
+          .select('id, rf_final_fob')
+          .eq('week_id', weekId);
+        
+        if (recheckError) {
+          logger.error('Error rechecking quotes:', recheckError);
+          return { success: false, error: 'Failed to validate pricing after auto-finalization' };
+        }
+        
+        const updatedFinalPricing = updatedQuotes?.filter(q => 
+          q.rf_final_fob !== null && q.rf_final_fob !== undefined
+        ) || [];
+        
+        if (updatedFinalPricing.length === 0) {
+          return { success: false, error: 'Cannot finalize: No quotes have final pricing set. Please set rf_final_fob for at least one quote, or ensure supplier prices are entered.' };
+        }
+        
+        logger.debug(`Successfully auto-finalized ${updatedFinalPricing.length} quotes`);
+      } else {
+        return { success: false, error: 'Cannot finalize: No quotes have final pricing set. Please set rf_final_fob for at least one quote, or ensure supplier prices are entered.' };
+      }
     }
 
     // Update week status (only use columns that exist in schema)
