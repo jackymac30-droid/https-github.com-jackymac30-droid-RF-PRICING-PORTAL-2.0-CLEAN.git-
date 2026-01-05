@@ -29,6 +29,7 @@ import { formatCurrency } from '../utils/helpers';
 import { useToast } from '../contexts/ToastContext';
 import { useApp } from '../contexts/AppContext';
 import { logger } from '../utils/logger';
+import { useRealtime } from '../hooks/useRealtime';
 import type { Week, Item } from '../types';
 import { optimizeAllocation, calculateHistoricalShares, type SupplierQuote, type HistoricalShare } from '../utils/allocationOptimizer';
 
