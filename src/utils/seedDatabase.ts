@@ -22,14 +22,15 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
 
     // 1. Insert Suppliers
     logger.debug('📦 Adding suppliers...');
+    const now = new Date().toISOString();
     const { data: suppliers, error: suppliersError } = await supabase
       .from('suppliers')
       .upsert([
-        { name: 'Fresh Farms Inc', email: 'supplier1@freshfarms.com' },
-        { name: 'Berry Best Co', email: 'supplier2@berrybest.com' },
-        { name: 'Organic Growers', email: 'supplier3@organicgrowers.com' },
-        { name: 'Valley Fresh', email: 'supplier4@valleyfresh.com' },
-        { name: 'Premium Produce', email: 'supplier5@premiumproduce.com' }
+        { name: 'Fresh Farms Inc', email: 'supplier1@freshfarms.com', updated_at: now },
+        { name: 'Berry Best Co', email: 'supplier2@berrybest.com', updated_at: now },
+        { name: 'Organic Growers', email: 'supplier3@organicgrowers.com', updated_at: now },
+        { name: 'Valley Fresh', email: 'supplier4@valleyfresh.com', updated_at: now },
+        { name: 'Premium Produce', email: 'supplier5@premiumproduce.com', updated_at: now }
       ], { onConflict: 'email' })
       .select();
 
