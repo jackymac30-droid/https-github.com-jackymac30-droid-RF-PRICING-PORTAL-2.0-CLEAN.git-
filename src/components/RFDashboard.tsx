@@ -601,9 +601,12 @@ export function RFDashboard() {
         // Reload week data to refresh supplier statuses
         await loadWeekData();
         
-        // Automatically switch to Award Volume tab after finalizing pricing
-        setMainView('award_volume');
-        showToast('Pricing finalized! You can now allocate volumes.', 'success');
+        // Small delay to ensure state is updated before switching tabs
+        setTimeout(() => {
+          // Automatically switch to Award Volume tab after finalizing pricing
+          setMainView('award_volume');
+          showToast('Pricing finalized! You can now allocate volumes.', 'success');
+        }, 100);
       } else {
         showToast(result.error || 'Failed to finalize pricing', 'error');
       }
