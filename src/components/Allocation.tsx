@@ -807,169 +807,139 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                       </div>
                     )}
 
-                {/* Supplier Allocation Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gradient-to-r from-emerald-500/20 to-lime-500/20 border-b-2 border-emerald-400/30">
-                      <tr>
-                        <th className="px-4 py-4 text-left text-xs font-black text-white uppercase tracking-wider">Supplier</th>
-                        <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">Price</th>
-                        <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">Allocated</th>
-                        <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">Cost</th>
-                        <th className="px-4 py-4 text-right text-xs font-black text-white uppercase tracking-wider">%</th>
-                        {exceptionsMode && (
-                          <th className="px-4 py-4 text-center text-xs font-black text-white uppercase tracking-wider">Response</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10">
-                      {sku.entries.map((entry, index) => {
-                        const percentage = sku.volumeNeeded > 0
-                          ? ((entry.awarded_volume / sku.volumeNeeded) * 100).toFixed(1)
-                          : '0.0';
-                        const rowCost = entry.price * entry.awarded_volume;
-                        const isException = exceptionsMode && (
-                          entry.supplier_response_status === 'revised' ||
-                          (entry.supplier_response_status === 'pending' && entry.supplier_response_volume !== null)
-                        );
+                    {/* Compact Supplier Rows */}
+                    <div className="p-6">
+                      <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-4">Supplier Allocations</div>
+                      <div className="space-y-2">
+                        {sku.entries.map((entry, index) => {
+                          const percentage = sku.volumeNeeded > 0
+                            ? ((entry.awarded_volume / sku.volumeNeeded) * 100).toFixed(1)
+                            : '0.0';
+                          const rowCost = entry.price * entry.awarded_volume;
+                          const isException = exceptionsMode && (
+                            entry.supplier_response_status === 'revised' ||
+                            (entry.supplier_response_status === 'pending' && entry.supplier_response_volume !== null)
+                          );
+                          const isCheapest = entry.price === cheapestPrice;
+                          const isPreferred = entry.awarded_volume > 0 && entry.awarded_volume === sku.volumeNeeded;
 
-                        // In exceptions mode, only show exceptions
-                        if (exceptionsMode && !isException) return null;
+                          // In exceptions mode, only show exceptions
+                          if (exceptionsMode && !isException) return null;
 
-                        return (
-                          <tr
-                            key={entry.quote_id}
-                            className={`hover:bg-white/8 transition-colors ${
-                              index === 0 ? 'bg-emerald-500/10 border-l-4 border-emerald-400' :
-                              isException ? 'bg-orange-500/20 border-l-4 border-orange-400' :
-                              'bg-white/0'
-                            }`}
-                          >
-                            <td className="px-4 py-4">
-                              <div className="font-bold text-white text-base">{entry.supplier_name}</div>
-                              {index === 0 && (
-                                <div className="text-xs text-emerald-300 mt-0.5">Lowest Price</div>
-                              )}
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              <div className="font-black text-white text-base">{formatCurrency(entry.price)}</div>
-                              {entry.dlvd_price && (
-                                <div className="text-xs text-white/50 mt-0.5">
-                                  {formatCurrency(entry.dlvd_price)} DLVD
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              {sku.isLocked || exceptionsMode ? (
-                                <div className="font-black text-white text-base">
-                                  {entry.awarded_volume > 0 ? entry.awarded_volume.toLocaleString() : '-'}
-                                </div>
-                              ) : (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={entry.awarded_volume || ''}
-                                  onChange={(e) => updateAllocation(
-                                    sku.item.id,
-                                    entry.supplier_id,
-                                    entry.quote_id,
-                                    parseInt(e.target.value) || 0
+                          return (
+                            <div
+                              key={entry.quote_id}
+                              className={`bg-white/5 hover:bg-white/10 rounded-xl p-4 border transition-all ${
+                                isCheapest ? 'border-emerald-400/50 bg-emerald-500/10' :
+                                isException ? 'border-orange-400/50 bg-orange-500/10' :
+                                'border-white/20'
+                              }`}
+                            >
+                              <div className="grid grid-cols-6 gap-4 items-center">
+                                {/* Supplier Name with Badges */}
+                                <div className="col-span-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="font-bold text-white text-base">{entry.supplier_name}</div>
+                                    {isCheapest && (
+                                      <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 rounded text-xs font-bold border border-emerald-400/50">
+                                        Cheapest
+                                      </span>
+                                    )}
+                                    {isPreferred && (
+                                      <span className="px-2 py-0.5 bg-blue-500/30 text-blue-200 rounded text-xs font-bold border border-blue-400/50">
+                                        Preferred
+                                      </span>
+                                    )}
+                                  </div>
+                                  {entry.dlvd_price && (
+                                    <div className="text-xs text-white/50 mt-0.5">
+                                      {formatCurrency(entry.dlvd_price)} DLVD
+                                    </div>
                                   )}
-                                  placeholder="0"
-                                  className="w-28 px-3 py-2 border-2 border-white/20 rounded-lg text-right font-black text-base text-white bg-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/50"
-                                />
-                              )}
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              <div className="font-black text-white text-base">
-                                {rowCost > 0 ? formatCurrency(rowCost) : '-'}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              <span className="font-bold text-base text-emerald-300">
-                                {entry.awarded_volume > 0 ? `${percentage}%` : '-'}
-                              </span>
-                            </td>
-                            {exceptionsMode && (
-                              <td className="px-4 py-4 text-center">
-                                {entry.supplier_response_status === 'revised' && (
-                                  <div className="flex flex-col items-center gap-2">
-                                    <span className="px-2.5 py-1 bg-orange-500/30 text-orange-200 rounded-full text-xs font-bold border border-orange-400/50">
-                                      Revised: {entry.supplier_response_volume?.toLocaleString()}
-                                    </span>
-                                    <button
-                                      onClick={async () => {
-                                        // Accept revised volume
-                                        await updateAllocation(
-                                          sku.item.id,
-                                          entry.supplier_id,
-                                          entry.quote_id,
-                                          entry.supplier_response_volume || 0
-                                        );
-                                        showToast('Revised volume accepted', 'success');
-                                        await loadData();
-                                      }}
-                                      className="flex items-center gap-1 px-3 py-1 bg-green-500/30 hover:bg-green-500/40 text-green-200 rounded-lg text-xs font-semibold border border-green-400/50 transition-all"
-                                    >
-                                      <Check className="w-3 h-3" />
-                                      Accept
-                                    </button>
+                                </div>
+
+                                {/* Finalized Unit Cost */}
+                                <div className="text-right">
+                                  <div className="text-xs text-white/60 mb-1">Unit Cost</div>
+                                  <div className="font-black text-white text-lg">{formatCurrency(entry.price)}</div>
+                                </div>
+
+                                {/* Proposed/Awarded Volume (Editable) */}
+                                <div className="text-right">
+                                  <div className="text-xs text-white/60 mb-1">Awarded</div>
+                                  {sku.isLocked || exceptionsMode ? (
+                                    <div className="font-black text-white text-lg">
+                                      {entry.awarded_volume > 0 ? entry.awarded_volume.toLocaleString() : '-'}
+                                    </div>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={entry.awarded_volume || ''}
+                                      onChange={(e) => updateAllocation(
+                                        sku.item.id,
+                                        entry.supplier_id,
+                                        entry.quote_id,
+                                        parseInt(e.target.value) || 0
+                                      )}
+                                      placeholder="0"
+                                      className="w-24 px-2 py-1.5 border-2 border-white/20 rounded-lg text-right font-black text-lg text-white bg-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/50"
+                                    />
+                                  )}
+                                </div>
+
+                                {/* Row Total Cost */}
+                                <div className="text-right">
+                                  <div className="text-xs text-white/60 mb-1">Row Cost</div>
+                                  <div className="font-black text-emerald-300 text-lg">
+                                    {rowCost > 0 ? formatCurrency(rowCost) : '-'}
+                                  </div>
+                                </div>
+
+                                {/* Percentage */}
+                                <div className="text-right">
+                                  <div className="text-xs text-white/60 mb-1">Share</div>
+                                  <div className="font-bold text-emerald-300 text-lg">
+                                    {entry.awarded_volume > 0 ? `${percentage}%` : '-'}
+                                  </div>
+                                </div>
+
+                                {/* Exception Response (if applicable) */}
+                                {exceptionsMode && (
+                                  <div className="col-span-6 mt-2 pt-2 border-t border-white/10">
+                                    {entry.supplier_response_status === 'revised' && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="px-2.5 py-1 bg-orange-500/30 text-orange-200 rounded-full text-xs font-bold border border-orange-400/50">
+                                          Revised: {entry.supplier_response_volume?.toLocaleString()}
+                                        </span>
+                                        <button
+                                          onClick={async () => {
+                                            await updateAllocation(
+                                              sku.item.id,
+                                              entry.supplier_id,
+                                              entry.quote_id,
+                                              entry.supplier_response_volume || 0
+                                            );
+                                            showToast('Revised volume accepted', 'success');
+                                            await loadData();
+                                          }}
+                                          className="flex items-center gap-1 px-3 py-1 bg-green-500/30 hover:bg-green-500/40 text-green-200 rounded-lg text-xs font-semibold border border-green-400/50 transition-all"
+                                        >
+                                          <Check className="w-3 h-3" />
+                                          Accept
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
-                                {entry.supplier_response_status === 'pending' && entry.supplier_response_volume !== null && (
-                                  <span className="px-2.5 py-1 bg-yellow-500/30 text-yellow-200 rounded-full text-xs font-bold border border-yellow-400/50">
-                                    Pending
-                                  </span>
-                                )}
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Summary */}
-                <div className="p-6 bg-white/5 border-t border-white/10">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-1">Weighted Avg</div>
-                      <div className="text-2xl font-black text-white">
-                        {sku.weightedAvgPrice > 0 ? formatCurrency(sku.weightedAvgPrice) : '-'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-1">Total Cost</div>
-                      <div className="text-2xl font-black text-emerald-200">
-                        {formatCurrency(sku.entries.reduce((sum, e) => sum + (e.price * e.awarded_volume), 0))}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-1">Remaining</div>
-                      <div className={`text-2xl font-black ${
-                        remaining === 0 ? 'text-green-300' : remaining > 0 ? 'text-orange-300' : 'text-red-300'
-                      }`}>
-                        {remaining.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-white/70 font-bold uppercase tracking-wider mb-1">Status</div>
-                      <div className="text-lg font-bold">
-                        {isComplete ? (
-                          <span className="text-green-300 flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" />
-                            Complete
-                          </span>
-                        ) : isOver ? (
-                          <span className="text-red-300">Over</span>
-                        ) : (
-                          <span className="text-orange-300">In Progress</span>
-                        )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
