@@ -34,6 +34,9 @@ export async function seedDatabase(): Promise<{ success: boolean; message: strin
       .select();
 
     if (suppliersError) throw new Error(`Failed to add suppliers: ${suppliersError.message}`);
+    if (!suppliers || suppliers.length === 0) {
+      throw new Error('Failed to add suppliers: No suppliers returned from database');
+    }
     logger.debug(`✅ Added ${suppliers.length} suppliers`);
 
     // 2. Insert Items (check if they exist first to avoid conflicts)

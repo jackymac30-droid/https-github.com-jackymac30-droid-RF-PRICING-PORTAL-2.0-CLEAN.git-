@@ -4,6 +4,7 @@ import { LogIn, Shield, Users, TrendingUp, Zap, Sparkles, ArrowRight, CheckCircl
 import { fetchSuppliers } from '../utils/database';
 import { supabase } from '../utils/supabase';
 import { seedDatabase } from '../utils/seedDatabase';
+import { logger } from '../utils/logger';
 import type { Supplier } from '../types';
 
 export function Login() {
@@ -615,6 +616,10 @@ export function Login() {
                         setSeeding(true);
                         setSeedMessage('');
                         try {
+                          if (!seedDatabase) {
+                            setSeedMessage('Error: seedDatabase function is not available. Please check the console for errors.');
+                            return;
+                          }
                           const result = await seedDatabase();
                           setSeedMessage(result.message);
                           if (result.success) {
@@ -623,7 +628,8 @@ export function Login() {
                             setSuppliers(updatedSuppliers);
                           }
                         } catch (err: any) {
-                          setSeedMessage(`Error: ${err.message}`);
+                          logger.error('Seed database error:', err);
+                          setSeedMessage(`Error: ${err.message || 'Unknown error occurred. Check browser console for details.'}`);
                         } finally {
                           setSeeding(false);
                         }
