@@ -481,63 +481,102 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
     }));
   }, []);
 
-  // AI Auto-Allocate
+  // Auto Allocate - Uses Total Volume Needed to distribute across suppliers
   const handleAIAutoAllocate = useCallback(async (sku: SKUAllocation) => {
     if (!selectedWeek || sku.volumeNeeded <= 0) {
       showToast('Please set volume needed first', 'error');
       return;
     }
 
+    if (sku.entries.length === 0) {
+      showToast('No suppliers available for allocation', 'error');
+      return;
+    }
+
     try {
-      // Fetch historical shares
-      const historicalShares = await fetchHistoricalSupplierShares(
-        sku.item.id,
-        selectedWeek.week_number,
-        10
-      );
+      // If target price is set, use optimizer with historical shares
+      if (sku.targetPrice > 0) {
+        // Fetch historical shares
+        const historicalShares = await fetchHistoricalSupplierShares(
+          sku.item.id,
+          selectedWeek.week_number,
+          10
+        );
 
-      // Convert to optimizer format
-      const quotes: SupplierQuote[] = sku.entries.map(entry => ({
-        supplierId: entry.supplier_id,
-        supplierName: entry.supplier_name,
-        price: entry.price,
-        maxVolume: undefined, // TODO: Add if tracked
-      }));
+        // Convert to optimizer format
+        const quotes: SupplierQuote[] = sku.entries.map(entry => ({
+          supplierId: entry.supplier_id,
+          supplierName: entry.supplier_name,
+          price: entry.price,
+          maxVolume: undefined, // TODO: Add if tracked
+        }));
 
-      const historicalSharesFormatted: HistoricalShare[] = historicalShares.map(share => ({
-        supplierId: share.supplierId,
-        sharePercent: share.sharePercent,
-        averageVolume: share.averageVolume,
-      }));
+        const historicalSharesFormatted: HistoricalShare[] = historicalShares.map(share => ({
+          supplierId: share.supplierId,
+          sharePercent: share.sharePercent,
+          averageVolume: share.averageVolume,
+        }));
 
-      // Optimize
-      const result = optimizeAllocation({
-        quotes,
-        totalVolumeNeeded: sku.volumeNeeded,
-        targetAvgPrice: sku.targetPrice,
-        historicalShares: historicalSharesFormatted,
-        fairnessWeight: sku.fairnessWeight,
-      });
+        // Optimize with target price
+        const result = optimizeAllocation({
+          quotes,
+          totalVolumeNeeded: sku.volumeNeeded,
+          targetAvgPrice: sku.targetPrice,
+          historicalShares: historicalSharesFormatted,
+          fairnessWeight: sku.fairnessWeight,
+        });
 
-      if (!result.isAchievable && result.reason) {
-        showToast(result.reason, 'warning');
-      }
-
-      // Apply allocations
-      result.allocations.forEach((volume, supplierId) => {
-        const entry = sku.entries.find(e => e.supplier_id === supplierId);
-        if (entry && volume > 0) {
-          updateAllocation(sku.item.id, supplierId, entry.quote_id, volume);
+        if (!result.isAchievable && result.reason) {
+          showToast(result.reason, 'warning');
         }
-      });
 
-      showToast(
-        `AI allocation complete! Achieved: ${formatCurrency(result.achievedPrice)}`,
-        'success'
-      );
+        // Apply allocations
+        result.allocations.forEach((volume, supplierId) => {
+          const entry = sku.entries.find(e => e.supplier_id === supplierId);
+          if (entry && volume > 0) {
+            updateAllocation(sku.item.id, supplierId, entry.quote_id, volume);
+          } else if (entry && volume === 0) {
+            // Clear allocation if optimizer set to 0
+            updateAllocation(sku.item.id, supplierId, entry.quote_id, 0);
+          }
+        });
+
+        showToast(
+          `Auto allocation complete! Achieved: ${formatCurrency(result.achievedPrice)}`,
+          'success'
+        );
+      } else {
+        // Simple allocation: distribute evenly across all suppliers (or to cheapest if fairness is 0)
+        // Clear existing allocations first
+        sku.entries.forEach(entry => {
+          updateAllocation(sku.item.id, entry.supplier_id, entry.quote_id, 0);
+        });
+
+        // Small delay to ensure clears complete, then allocate
+        setTimeout(() => {
+          if (sku.fairnessWeight === 0) {
+            // Pure cheapest: allocate all to cheapest supplier
+            const cheapest = sku.entries.reduce((min, e) => e.price < min.price ? e : min, sku.entries[0]);
+            updateAllocation(sku.item.id, cheapest.supplier_id, cheapest.quote_id, sku.volumeNeeded);
+            showToast(`Allocated ${sku.volumeNeeded.toLocaleString()} cases to ${cheapest.supplier_name} (cheapest)`, 'success');
+          } else {
+            // Distribute evenly across all suppliers
+            const perSupplier = Math.floor(sku.volumeNeeded / sku.entries.length);
+            const remainder = sku.volumeNeeded % sku.entries.length;
+            
+            sku.entries.forEach((entry, index) => {
+              const volume = perSupplier + (index < remainder ? 1 : 0);
+              if (volume > 0) {
+                updateAllocation(sku.item.id, entry.supplier_id, entry.quote_id, volume);
+              }
+            });
+            showToast(`Distributed ${sku.volumeNeeded.toLocaleString()} cases across ${sku.entries.length} suppliers`, 'success');
+          }
+        }, 100);
+      }
     } catch (err) {
-      logger.error('Error in AI auto-allocate:', err);
-      showToast('Failed to run AI allocation', 'error');
+      logger.error('Error in auto-allocate:', err);
+      showToast('Failed to run auto allocation', 'error');
     }
   }, [selectedWeek, showToast, updateAllocation]);
 
@@ -829,7 +868,18 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                     <div className="grid grid-cols-4 gap-4 flex-1 max-w-3xl">
                       <div className="text-center">
                         <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-1">Total Needed</div>
-                        <div className="text-2xl font-black text-white">{sku.volumeNeeded.toLocaleString()}</div>
+                        {sku.isLocked || exceptionsMode ? (
+                          <div className="text-2xl font-black text-white">{sku.volumeNeeded.toLocaleString()}</div>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            value={sku.volumeNeeded || ''}
+                            onChange={(e) => updateVolumeNeeded(sku.item.id, parseInt(e.target.value) || 0)}
+                            placeholder="0"
+                            className="w-full text-2xl font-black text-white bg-transparent border-none outline-none text-center focus:ring-0 p-0"
+                          />
+                        )}
                       </div>
                       <div className="text-center">
                         <div className="text-xs text-white/60 font-bold uppercase tracking-wider mb-1">Allocated</div>
@@ -874,6 +924,23 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                     {/* AI Insights Panel */}
                     {!exceptionsMode && (
                       <AIInsightsPanel sku={sku} selectedWeek={selectedWeek} />
+                    )}
+
+                    {/* Auto Allocate Button */}
+                    {!sku.isLocked && !exceptionsMode && (
+                      <div className="px-6 py-4 border-b border-white/10 bg-white/5">
+                        <button
+                          onClick={() => handleAIAutoAllocate(sku)}
+                          disabled={sku.volumeNeeded <= 0}
+                          className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-6 py-3 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Zap className="w-5 h-5" />
+                          Auto Allocate
+                        </button>
+                        <p className="text-xs text-white/60 mt-2">
+                          Distributes {sku.volumeNeeded.toLocaleString()} cases across suppliers based on target price and fairness
+                        </p>
+                      </div>
                     )}
 
                     {/* Compact Supplier Rows */}
