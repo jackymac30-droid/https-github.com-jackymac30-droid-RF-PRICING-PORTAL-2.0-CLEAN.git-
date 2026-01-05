@@ -955,46 +955,39 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                           return (
                             <div
                               key={entry.quote_id}
-                              className={`bg-white/5 hover:bg-white/10 rounded-xl p-4 border transition-all ${
-                                isCheapest ? 'border-emerald-400/50 bg-emerald-500/10' :
-                                isException ? 'border-orange-400/50 bg-orange-500/10' :
-                                'border-white/20'
+                              className={`bg-white/5 hover:bg-white/8 rounded-lg p-3 border transition-all ${
+                                isCheapest ? 'border-emerald-400/40 bg-emerald-500/8' :
+                                isException ? 'border-orange-400/40 bg-orange-500/8' :
+                                'border-white/10'
                               }`}
                             >
-                              <div className="grid grid-cols-6 gap-4 items-center">
-                                {/* Supplier Name with Badges */}
-                                <div className="col-span-2">
-                                  <div className="flex items-center gap-2">
-                                    <div className="font-bold text-white text-base">{entry.supplier_name}</div>
+                              <div className="grid grid-cols-5 gap-3 items-center">
+                                {/* Supplier */}
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="font-semibold text-white text-sm truncate">{entry.supplier_name}</div>
                                     {isCheapest && (
-                                      <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 rounded text-xs font-bold border border-emerald-400/50">
-                                        Cheapest
-                                      </span>
-                                    )}
-                                    {isPreferred && (
-                                      <span className="px-2 py-0.5 bg-blue-500/30 text-blue-200 rounded text-xs font-bold border border-blue-400/50">
-                                        Preferred
+                                      <span className="px-1.5 py-0.5 bg-emerald-500/30 text-emerald-200 rounded text-[10px] font-bold shrink-0">
+                                        Lowest
                                       </span>
                                     )}
                                   </div>
-                                  {entry.dlvd_price && (
-                                    <div className="text-xs text-white/50 mt-0.5">
-                                      {formatCurrency(entry.dlvd_price)} DLVD
-                                    </div>
-                                  )}
                                 </div>
 
-                                {/* Finalized Unit Cost */}
+                                {/* Unit Cost */}
                                 <div className="text-right">
-                                  <div className="text-xs text-white/60 mb-1">Unit Cost</div>
-                                  <div className="font-black text-white text-lg">{formatCurrency(entry.price)}</div>
+                                  <div className="font-semibold text-white text-sm">{formatCurrency(entry.price)}</div>
                                 </div>
 
-                                {/* Proposed/Awarded Volume (Editable) */}
+                                {/* Offered */}
                                 <div className="text-right">
-                                  <div className="text-xs text-white/60 mb-1">Awarded</div>
+                                  <div className="text-white/40 text-xs">-</div>
+                                </div>
+
+                                {/* Allocated */}
+                                <div className="text-right">
                                   {sku.isLocked || exceptionsMode ? (
-                                    <div className="font-black text-white text-lg">
+                                    <div className="font-semibold text-white text-sm">
                                       {entry.awarded_volume > 0 ? entry.awarded_volume.toLocaleString() : '-'}
                                     </div>
                                   ) : (
@@ -1009,56 +1002,43 @@ export function Allocation({ selectedWeek, onWeekUpdate }: AllocationProps) {
                                         parseInt(e.target.value) || 0
                                       )}
                                       placeholder="0"
-                                      className="w-24 px-2 py-1.5 border-2 border-white/20 rounded-lg text-right font-black text-lg text-white bg-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/50"
+                                      className="w-20 px-2 py-1 border border-white/20 rounded text-right font-semibold text-sm text-white bg-white/10 focus:outline-none focus:ring-1 focus:ring-emerald-400/50"
                                     />
                                   )}
                                 </div>
 
-                                {/* Row Total Cost */}
+                                {/* Row Cost */}
                                 <div className="text-right">
-                                  <div className="text-xs text-white/60 mb-1">Row Cost</div>
-                                  <div className="font-black text-emerald-300 text-lg">
+                                  <div className="font-semibold text-emerald-300 text-sm">
                                     {rowCost > 0 ? formatCurrency(rowCost) : '-'}
                                   </div>
                                 </div>
-
-                                {/* Percentage */}
-                                <div className="text-right">
-                                  <div className="text-xs text-white/60 mb-1">Share</div>
-                                  <div className="font-bold text-emerald-300 text-lg">
-                                    {entry.awarded_volume > 0 ? `${percentage}%` : '-'}
-                                  </div>
-                                </div>
-
-                                {/* Exception Response (if applicable) */}
-                                {exceptionsMode && (
-                                  <div className="col-span-6 mt-2 pt-2 border-t border-white/10">
-                                    {entry.supplier_response_status === 'revised' && (
-                                      <div className="flex items-center justify-between">
-                                        <span className="px-2.5 py-1 bg-orange-500/30 text-orange-200 rounded-full text-xs font-bold border border-orange-400/50">
-                                          Revised: {entry.supplier_response_volume?.toLocaleString()}
-                                        </span>
-                                        <button
-                                          onClick={async () => {
-                                            await updateAllocation(
-                                              sku.item.id,
-                                              entry.supplier_id,
-                                              entry.quote_id,
-                                              entry.supplier_response_volume || 0
-                                            );
-                                            showToast('Revised volume accepted', 'success');
-                                            await loadData();
-                                          }}
-                                          className="flex items-center gap-1 px-3 py-1 bg-green-500/30 hover:bg-green-500/40 text-green-200 rounded-lg text-xs font-semibold border border-green-400/50 transition-all"
-                                        >
-                                          <Check className="w-3 h-3" />
-                                          Accept
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
                               </div>
+
+                              {/* Exception Response (if applicable) */}
+                              {exceptionsMode && entry.supplier_response_status === 'revised' && (
+                                <div className="mt-2 pt-2 border-t border-white/5 flex items-center justify-between">
+                                  <span className="px-2 py-0.5 bg-orange-500/30 text-orange-200 rounded text-xs font-semibold">
+                                    Revised: {entry.supplier_response_volume?.toLocaleString()}
+                                  </span>
+                                  <button
+                                    onClick={async () => {
+                                      await updateAllocation(
+                                        sku.item.id,
+                                        entry.supplier_id,
+                                        entry.quote_id,
+                                        entry.supplier_response_volume || 0
+                                      );
+                                      showToast('Revised volume accepted', 'success');
+                                      await loadData();
+                                    }}
+                                    className="flex items-center gap-1 px-2.5 py-1 bg-green-500/30 hover:bg-green-500/40 text-green-200 rounded text-xs font-semibold border border-green-400/50 transition-all"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    Accept
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
